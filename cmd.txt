@@ -1,0 +1,1 @@
+dotnet ef dbcontext scaffold "Data Source=DESKTOP-JM00DK5;Initial Catalog=Facturacion;Persist Security Info=True;User ID=sa;Password=sql2;TrustServerCertificate=True" Microsoft.EntityFrameworkCore.SqlServer  --context-dir Data --output-dir Models/Domain -f
