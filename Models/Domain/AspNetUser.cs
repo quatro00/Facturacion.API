@@ -51,6 +51,8 @@ public partial class AspNetUser
 
     public virtual ICollection<AspNetUserToken> AspNetUserTokens { get; set; } = new List<AspNetUserToken>();
 
+    public virtual ICollection<Cuentum> Cuenta { get; set; } = new List<Cuentum>();
+
     public virtual Organizacion? Organizacion { get; set; }
 
     public virtual ICollection<SistemaRolUsuario> SistemaRolUsuarios { get; set; } = new List<SistemaRolUsuario>();

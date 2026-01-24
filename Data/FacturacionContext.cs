@@ -30,6 +30,10 @@ public partial class FacturacionContext : DbContext
 
     public virtual DbSet<AspNetUserToken> AspNetUserTokens { get; set; }
 
+    public virtual DbSet<CRegimenFiscal> CRegimenFiscals { get; set; }
+
+    public virtual DbSet<Cuentum> Cuenta { get; set; }
+
     public virtual DbSet<Organizacion> Organizacions { get; set; }
 
     public virtual DbSet<Sistema> Sistemas { get; set; }
@@ -117,6 +121,36 @@ public partial class FacturacionContext : DbContext
             entity.HasKey(e => new { e.UserId, e.LoginProvider, e.Name });
 
             entity.HasOne(d => d.User).WithMany(p => p.AspNetUserTokens).HasForeignKey(d => d.UserId);
+        });
+
+        modelBuilder.Entity<CRegimenFiscal>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_c_RegimenFiscal");
+
+            entity.ToTable("cRegimenFiscal");
+
+            entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
+            entity.Property(e => e.Descripcion).HasMaxLength(250);
+            entity.Property(e => e.FechaCreacion).HasColumnType("datetime");
+            entity.Property(e => e.FechaModificacion).HasColumnType("datetime");
+            entity.Property(e => e.InicioVigencia).HasColumnType("datetime");
+            entity.Property(e => e.RegimenFiscal).HasMaxLength(50);
+            entity.Property(e => e.TerminoVigencia).HasColumnType("datetime");
+            entity.Property(e => e.UsuarioCreacion).HasMaxLength(50);
+            entity.Property(e => e.UsuarioModificacion).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<Cuentum>(entity =>
+        {
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.FechaRegistro).HasColumnType("datetime");
+            entity.Property(e => e.Nombre).HasMaxLength(150);
+            entity.Property(e => e.UserId).HasMaxLength(450);
+
+            entity.HasOne(d => d.User).WithMany(p => p.Cuenta)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Cuenta_AspNetUsers");
         });
 
         modelBuilder.Entity<Organizacion>(entity =>

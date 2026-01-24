@@ -1,0 +1,17 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace Facturacion.API.Models.Domain;
+
+public partial class Cuentum
+{
+    public Guid Id { get; set; }
+
+    public string UserId { get; set; } = null!;
+
+    public string Nombre { get; set; } = null!;
+
+    public DateTime FechaRegistro { get; set; }
+
+    public virtual AspNetUser User { get; set; } = null!;
+}
