@@ -30,11 +30,15 @@ public partial class FacturacionContext : DbContext
 
     public virtual DbSet<AspNetUserToken> AspNetUserTokens { get; set; }
 
+    public virtual DbSet<CCodigoPostal> CCodigoPostals { get; set; }
+
     public virtual DbSet<CRegimenFiscal> CRegimenFiscals { get; set; }
 
     public virtual DbSet<Cuentum> Cuenta { get; set; }
 
     public virtual DbSet<Organizacion> Organizacions { get; set; }
+
+    public virtual DbSet<RazonSocial> RazonSocials { get; set; }
 
     public virtual DbSet<Sistema> Sistemas { get; set; }
 
@@ -123,6 +127,59 @@ public partial class FacturacionContext : DbContext
             entity.HasOne(d => d.User).WithMany(p => p.AspNetUserTokens).HasForeignKey(d => d.UserId);
         });
 
+        modelBuilder.Entity<CCodigoPostal>(entity =>
+        {
+            entity.ToTable("cCodigoPostal");
+
+            entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
+            entity.Property(e => e.CCp)
+                .HasMaxLength(150)
+                .HasColumnName("c_CP");
+            entity.Property(e => e.CCveCiudad)
+                .HasMaxLength(10)
+                .IsFixedLength()
+                .HasColumnName("c_cve_ciudad");
+            entity.Property(e => e.CEstado)
+                .HasMaxLength(150)
+                .HasColumnName("c_estado");
+            entity.Property(e => e.CMnpio)
+                .HasMaxLength(150)
+                .HasColumnName("c_mnpio");
+            entity.Property(e => e.COficina)
+                .HasMaxLength(150)
+                .HasColumnName("c_oficina");
+            entity.Property(e => e.CTipoAsenta)
+                .HasMaxLength(150)
+                .HasColumnName("c_tipo_asenta");
+            entity.Property(e => e.DAsenta)
+                .HasMaxLength(150)
+                .HasColumnName("d_asenta");
+            entity.Property(e => e.DCiudad)
+                .HasMaxLength(150)
+                .HasColumnName("d_ciudad");
+            entity.Property(e => e.DCodigo)
+                .HasMaxLength(10)
+                .HasColumnName("d_codigo");
+            entity.Property(e => e.DCp)
+                .HasMaxLength(150)
+                .HasColumnName("d_CP");
+            entity.Property(e => e.DEstado)
+                .HasMaxLength(150)
+                .HasColumnName("d_estado");
+            entity.Property(e => e.DMnpio)
+                .HasMaxLength(150)
+                .HasColumnName("D_mnpio");
+            entity.Property(e => e.DTipoAsenta)
+                .HasMaxLength(150)
+                .HasColumnName("d_tipo_asenta");
+            entity.Property(e => e.DZona)
+                .HasMaxLength(150)
+                .HasColumnName("d_zona");
+            entity.Property(e => e.IdAsentaCpcons)
+                .HasMaxLength(150)
+                .HasColumnName("id_asenta_cpcons");
+        });
+
         modelBuilder.Entity<CRegimenFiscal>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK_c_RegimenFiscal");
@@ -165,6 +222,39 @@ public partial class FacturacionContext : DbContext
             entity.Property(e => e.Nombre).HasMaxLength(500);
             entity.Property(e => e.Responsable).HasMaxLength(500);
             entity.Property(e => e.Telefono).HasMaxLength(500);
+        });
+
+        modelBuilder.Entity<RazonSocial>(entity =>
+        {
+            entity.ToTable("RazonSocial");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.Calle).HasMaxLength(50);
+            entity.Property(e => e.CelularNotificaciones).HasMaxLength(50);
+            entity.Property(e => e.CodigoPostal).HasMaxLength(50);
+            entity.Property(e => e.Colonia).HasMaxLength(50);
+            entity.Property(e => e.Estado).HasMaxLength(50);
+            entity.Property(e => e.FechaCreacion).HasColumnType("datetime");
+            entity.Property(e => e.FechaModificacion).HasMaxLength(50);
+            entity.Property(e => e.Municipio).HasMaxLength(50);
+            entity.Property(e => e.NoExterior).HasMaxLength(50);
+            entity.Property(e => e.NoInterior).HasMaxLength(50);
+            entity.Property(e => e.RazonSocial1)
+                .HasMaxLength(250)
+                .HasColumnName("RazonSocial");
+            entity.Property(e => e.Rfc).HasMaxLength(50);
+            entity.Property(e => e.UsuarioCreacionId).HasMaxLength(50);
+            entity.Property(e => e.UsuarioModificacionId).HasMaxLength(50);
+
+            entity.HasOne(d => d.Cuenta).WithMany(p => p.RazonSocials)
+                .HasForeignKey(d => d.CuentaId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RazonSocial_Cuenta");
+
+            entity.HasOne(d => d.RegimenFiscal).WithMany(p => p.RazonSocials)
+                .HasForeignKey(d => d.RegimenFiscalId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_RazonSocial_cRegimenFiscal");
         });
 
         modelBuilder.Entity<Sistema>(entity =>

@@ -20,5 +20,10 @@ namespace Facturacion.API.Helpers
         {
             return User.FindFirst("Id").Value;
         }
+
+        public static string GetCuentaId(this ClaimsPrincipal User)
+        {
+            return User.FindFirst("CuentaId").Value;
+        }
     }
 }

@@ -63,7 +63,7 @@ namespace Facturacion.API.Controllers.Admin
             //    return ValidationProblem(ModelState);
             //}
 
-            var jwtToken = tokenRepository.CreateJwtToken(user, roles.ToList());
+            var jwtToken = tokenRepository.CreateJwtToken(user, roles.ToList(), "NA");
             var response = new LoginResponseDto()
             {
                 AccessToken = jwtToken,

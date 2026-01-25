@@ -53,9 +53,10 @@ namespace Facturacion.API.Controllers.Cliente
             // Roles (para el token)
             var roles = await userManager.GetRolesAsync(user);
 
-            var jwtToken = tokenRepository.CreateJwtToken(user, roles.ToList());
+            var cuenta = await this._context.Cuenta.Where(x => x.UserId == user.Id).FirstOrDefaultAsync();
+            var jwtToken = tokenRepository.CreateJwtToken(user, roles.ToList(), cuenta.Id.ToString());
 
-            var cuenta = await this._context.Cuenta.Where(x=>x.UserId == user.Id).FirstOrDefaultAsync();
+            
             var response = new LoginResponseDto
             {
                 AccessToken = jwtToken,

@@ -13,5 +13,7 @@ public partial class Cuentum
 
     public DateTime FechaRegistro { get; set; }
 
+    public virtual ICollection<RazonSocial> RazonSocials { get; set; } = new List<RazonSocial>();
+
     public virtual AspNetUser User { get; set; } = null!;
 }

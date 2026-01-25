@@ -20,7 +20,7 @@ namespace Facturacion.API.Repositories.Implementation
             this.configuration = configuration;
             this.context = context;
         }
-        public string CreateJwtToken(IdentityUser user, List<string> roles)
+        public string CreateJwtToken(IdentityUser user, List<string> roles, string cuentaId)
         {
             //Buscamos el usuario
             //string sucursalId = context.Usuarios.Where(x => x.LoginId == user.Id).FirstOrDefault().SucursalId.ToString();
@@ -30,6 +30,7 @@ namespace Facturacion.API.Repositories.Implementation
             {
                 new Claim(ClaimTypes.Email, user.Email),
                 new Claim("Id", user.Id),
+                //new Claim("CuentaId", cuentaId),
                 //new Claim("SucursalId", sucursalId),
             };
 

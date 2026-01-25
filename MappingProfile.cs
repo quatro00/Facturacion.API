@@ -1,5 +1,6 @@
 ﻿using AutoMapper;
 using Facturacion.API.Models.Domain;
+using Facturacion.API.Models.Dto.Cliente.Catalogos;
 
 namespace Facturacion.API
 {
@@ -7,19 +8,8 @@ namespace Facturacion.API
     {
         public MappingProfile()
         {
-            ////organizacion
-            //CreateMap<Organizacion, GetOrganizacionDto>();
-
-            //CreateMap<CreateOrganizacionDto, Organizacion>()
-            //    .ForMember(x => x.Id, opt => opt.Ignore())
-            //    .ForMember(x => x.UsuarioCreacion, opt => opt.Ignore())
-            //    .ForMember(x => x.FechaCreacion, opt => opt.Ignore());
-
-            //CreateMap<UpdateOrganizacionDto, Organizacion>()
-            //    .ForMember(dest => dest.Id, opt => opt.Ignore())
-            //    .ForMember(dest => dest.UsuarioCreacion, opt => opt.Ignore())
-            //    .ForMember(dest => dest.FechaCreacion, opt => opt.Ignore());
-
+            //organizacion
+            CreateMap<CRegimenFiscal, ClienteGetRegimenFiscal>();
 
             ////sistema
             //CreateMap<Sistema, GetSistemaDto>()

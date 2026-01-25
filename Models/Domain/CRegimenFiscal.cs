@@ -28,4 +28,6 @@ public partial class CRegimenFiscal
     public DateTime? FechaModificacion { get; set; }
 
     public string? UsuarioModificacion { get; set; }
+
+    public virtual ICollection<RazonSocial> RazonSocials { get; set; } = new List<RazonSocial>();
 }
