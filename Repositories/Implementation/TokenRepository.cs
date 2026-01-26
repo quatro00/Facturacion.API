@@ -30,7 +30,7 @@ namespace Facturacion.API.Repositories.Implementation
             {
                 new Claim(ClaimTypes.Email, user.Email),
                 new Claim("Id", user.Id),
-                //new Claim("CuentaId", cuentaId),
+                new Claim("CuentaId", cuentaId),
                 //new Claim("SucursalId", sucursalId),
             };
 

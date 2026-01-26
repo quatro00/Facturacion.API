@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using Facturacion.API.Models.Domain;
 using Facturacion.API.Models.Dto.Cliente.Catalogos;
+using Facturacion.API.Models.Dto.Cliente.Perfil;
 
 namespace Facturacion.API
 {
@@ -10,6 +11,10 @@ namespace Facturacion.API
         {
             //organizacion
             CreateMap<CRegimenFiscal, ClienteGetRegimenFiscal>();
+
+            //organizacion
+            CreateMap<RazonSocial, GetRazonSocialResponse>()
+                 .ForMember(dest => dest.razonSocial, opt => opt.MapFrom(src => src.RazonSocial1));
 
             ////sistema
             //CreateMap<Sistema, GetSistemaDto>()

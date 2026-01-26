@@ -29,5 +29,7 @@ public partial class CRegimenFiscal
 
     public string? UsuarioModificacion { get; set; }
 
+    public virtual ICollection<Cliente> Clientes { get; set; } = new List<Cliente>();
+
     public virtual ICollection<RazonSocial> RazonSocials { get; set; } = new List<RazonSocial>();
 }

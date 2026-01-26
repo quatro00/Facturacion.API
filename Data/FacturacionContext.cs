@@ -32,7 +32,25 @@ public partial class FacturacionContext : DbContext
 
     public virtual DbSet<CCodigoPostal> CCodigoPostals { get; set; }
 
+    public virtual DbSet<CExportacion> CExportacions { get; set; }
+
+    public virtual DbSet<CFormaPago> CFormaPagos { get; set; }
+
+    public virtual DbSet<CMetodoPago> CMetodoPagos { get; set; }
+
+    public virtual DbSet<CMonedum> CMoneda { get; set; }
+
     public virtual DbSet<CRegimenFiscal> CRegimenFiscals { get; set; }
+
+    public virtual DbSet<CUsoCfdi> CUsoCfdis { get; set; }
+
+    public virtual DbSet<Cliente> Clientes { get; set; }
+
+    public virtual DbSet<ClienteConfiguracion> ClienteConfiguracions { get; set; }
+
+    public virtual DbSet<ClienteContacto> ClienteContactos { get; set; }
+
+    public virtual DbSet<ClientePac> ClientePacs { get; set; }
 
     public virtual DbSet<Cuentum> Cuenta { get; set; }
 
@@ -180,6 +198,95 @@ public partial class FacturacionContext : DbContext
                 .HasColumnName("id_asenta_cpcons");
         });
 
+        modelBuilder.Entity<CExportacion>(entity =>
+        {
+            entity.HasKey(e => e.CExportacion1);
+
+            entity.ToTable("cExportacion");
+
+            entity.Property(e => e.CExportacion1)
+                .HasMaxLength(2)
+                .HasColumnName("cExportacion");
+            entity.Property(e => e.Descripcion).HasMaxLength(100);
+            entity.Property(e => e.InicioVigencia).HasColumnType("date");
+            entity.Property(e => e.TerminoVigencia).HasMaxLength(1);
+        });
+
+        modelBuilder.Entity<CFormaPago>(entity =>
+        {
+            entity.HasKey(e => e.CFormaPago1).HasName("PK_FormaPago");
+
+            entity.ToTable("cFormaPago");
+
+            entity.Property(e => e.CFormaPago1)
+                .HasMaxLength(2)
+                .HasColumnName("c_FormaPago");
+            entity.Property(e => e.Bancarizado).HasMaxLength(50);
+            entity.Property(e => e.CuentaDeBenenficiario)
+                .HasMaxLength(50)
+                .HasColumnName("Cuenta_de_Benenficiario");
+            entity.Property(e => e.CuentaOrdenante)
+                .HasMaxLength(50)
+                .HasColumnName("Cuenta_Ordenante");
+            entity.Property(e => e.Descripcion).HasMaxLength(50);
+            entity.Property(e => e.FechaFinDeVigencia)
+                .HasMaxLength(1)
+                .HasColumnName("Fecha_fin_de_vigencia");
+            entity.Property(e => e.FechaInicioDeVigencia)
+                .HasColumnType("date")
+                .HasColumnName("Fecha_inicio_de_vigencia");
+            entity.Property(e => e.NombreDelBancoEmisorDeLaCuentaOrdenanteEnCasoDeExtranjero)
+                .HasMaxLength(100)
+                .HasColumnName("Nombre_del_Banco_emisor_de_la_cuenta_ordenante_en_caso_de_extranjero");
+            entity.Property(e => e.NúmeroDeOperación)
+                .HasMaxLength(50)
+                .HasColumnName("Número_de_operación");
+            entity.Property(e => e.PatrónParaCuentaBeneficiaria)
+                .HasMaxLength(100)
+                .HasColumnName("Patrón_para_cuenta_Beneficiaria");
+            entity.Property(e => e.PatrónParaCuentaOrdenante)
+                .HasMaxLength(100)
+                .HasColumnName("Patrón_para_cuenta_ordenante");
+            entity.Property(e => e.RfcDelEmisorCuentaDeBeneficiario)
+                .HasMaxLength(50)
+                .HasColumnName("RFC_del_Emisor_Cuenta_de_Beneficiario");
+            entity.Property(e => e.RfcDelEmisorDeLaCuentaOrdenante)
+                .HasMaxLength(50)
+                .HasColumnName("RFC_del_Emisor_de_la_cuenta_ordenante");
+            entity.Property(e => e.TipoCadenaPago)
+                .HasMaxLength(50)
+                .HasColumnName("Tipo_Cadena_Pago");
+        });
+
+        modelBuilder.Entity<CMetodoPago>(entity =>
+        {
+            entity.HasKey(e => e.MetodoPagoId);
+
+            entity.ToTable("cMetodoPago");
+
+            entity.Property(e => e.MetodoPagoId).HasMaxLength(3);
+            entity.Property(e => e.Descripcion).HasMaxLength(250);
+            entity.Property(e => e.InicioVigencia).HasColumnType("datetime");
+            entity.Property(e => e.TerminoVigencia).HasColumnType("datetime");
+        });
+
+        modelBuilder.Entity<CMonedum>(entity =>
+        {
+            entity.HasKey(e => e.CMoneda);
+
+            entity.ToTable("cMoneda");
+
+            entity.Property(e => e.CMoneda)
+                .HasMaxLength(3)
+                .HasColumnName("cMoneda");
+            entity.Property(e => e.Descripcion).HasMaxLength(100);
+            entity.Property(e => e.InicioVigencia).HasColumnType("date");
+            entity.Property(e => e.PorcentajeVariación)
+                .HasMaxLength(50)
+                .HasColumnName("Porcentaje_variación");
+            entity.Property(e => e.TerminoVigencia).HasMaxLength(1);
+        });
+
         modelBuilder.Entity<CRegimenFiscal>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("PK_c_RegimenFiscal");
@@ -195,6 +302,157 @@ public partial class FacturacionContext : DbContext
             entity.Property(e => e.TerminoVigencia).HasColumnType("datetime");
             entity.Property(e => e.UsuarioCreacion).HasMaxLength(50);
             entity.Property(e => e.UsuarioModificacion).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<CUsoCfdi>(entity =>
+        {
+            entity.HasKey(e => e.CUsoCfdi1).HasName("PK__cUsoCFDI__B6A94A1FE200928E");
+
+            entity.ToTable("cUsoCFDI");
+
+            entity.Property(e => e.CUsoCfdi1)
+                .HasMaxLength(5)
+                .IsUnicode(false)
+                .HasColumnName("c_UsoCFDI");
+            entity.Property(e => e.Activo)
+                .IsRequired()
+                .HasDefaultValueSql("((1))");
+            entity.Property(e => e.Descripcion)
+                .HasMaxLength(150)
+                .IsUnicode(false);
+            entity.Property(e => e.InicioVigencia).HasColumnType("datetime");
+            entity.Property(e => e.RegimenReceptor).HasMaxLength(450);
+            entity.Property(e => e.TerminoVigencia).HasColumnType("datetime");
+        });
+
+        modelBuilder.Entity<Cliente>(entity =>
+        {
+            entity.ToTable("Cliente");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.Calle).HasMaxLength(150);
+            entity.Property(e => e.CodigoPostal).HasMaxLength(50);
+            entity.Property(e => e.Colonia).HasMaxLength(50);
+            entity.Property(e => e.Email).HasMaxLength(50);
+            entity.Property(e => e.Estado).HasMaxLength(50);
+            entity.Property(e => e.FechaCreacion).HasColumnType("datetime");
+            entity.Property(e => e.FechaModificacion).HasColumnType("datetime");
+            entity.Property(e => e.Municipio).HasMaxLength(50);
+            entity.Property(e => e.NumeroExterior).HasMaxLength(50);
+            entity.Property(e => e.NumeroInterior).HasMaxLength(50);
+            entity.Property(e => e.Pais)
+                .HasMaxLength(50)
+                .HasDefaultValueSql("(N'México')");
+            entity.Property(e => e.RazonSocial).HasMaxLength(250);
+            entity.Property(e => e.Rfc).HasMaxLength(50);
+            entity.Property(e => e.Telefono).HasMaxLength(50);
+            entity.Property(e => e.UsuarioCreacionId).HasMaxLength(50);
+            entity.Property(e => e.UsuarioModificacion).HasMaxLength(50);
+
+            entity.HasOne(d => d.Cuenta).WithMany(p => p.Clientes)
+                .HasForeignKey(d => d.CuentaId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Cliente_Cuenta");
+
+            entity.HasOne(d => d.RegimenFiscal).WithMany(p => p.Clientes)
+                .HasForeignKey(d => d.RegimenFiscalId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Cliente_cRegimenFiscal");
+        });
+
+        modelBuilder.Entity<ClienteConfiguracion>(entity =>
+        {
+            entity.ToTable("ClienteConfiguracion");
+
+            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.Activo)
+                .IsRequired()
+                .HasDefaultValueSql("((1))");
+            entity.Property(e => e.Exportacion)
+                .HasMaxLength(2)
+                .HasDefaultValueSql("('01')");
+            entity.Property(e => e.FechaActualizacion).HasColumnType("datetime");
+            entity.Property(e => e.FechaCreacion)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.FormaPago).HasMaxLength(2);
+            entity.Property(e => e.MetodoPago).HasMaxLength(3);
+            entity.Property(e => e.Moneda)
+                .HasMaxLength(3)
+                .HasDefaultValueSql("('MXN')");
+            entity.Property(e => e.UsoCfdiDefault)
+                .HasMaxLength(5)
+                .IsUnicode(false)
+                .HasColumnName("UsoCFDI_Default");
+            entity.Property(e => e.UsuarioCreacionId).HasMaxLength(50);
+            entity.Property(e => e.UsuarioModificacionId).HasMaxLength(50);
+
+            entity.HasOne(d => d.Cliente).WithMany(p => p.ClienteConfiguracions)
+                .HasForeignKey(d => d.ClienteId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ClienteConfiguracion_Cliente");
+
+            entity.HasOne(d => d.ExportacionNavigation).WithMany(p => p.ClienteConfiguracions)
+                .HasForeignKey(d => d.Exportacion)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ClienteConfiguracion_cExportacion");
+
+            entity.HasOne(d => d.FormaPagoNavigation).WithMany(p => p.ClienteConfiguracions)
+                .HasForeignKey(d => d.FormaPago)
+                .HasConstraintName("FK_ClienteConfiguracion_cFormaPago");
+
+            entity.HasOne(d => d.MetodoPagoNavigation).WithMany(p => p.ClienteConfiguracions)
+                .HasForeignKey(d => d.MetodoPago)
+                .HasConstraintName("FK_ClienteConfiguracion_cMetodoPago");
+
+            entity.HasOne(d => d.MonedaNavigation).WithMany(p => p.ClienteConfiguracions)
+                .HasForeignKey(d => d.Moneda)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ClienteConfiguracion_cMoneda");
+
+            entity.HasOne(d => d.UsoCfdiDefaultNavigation).WithMany(p => p.ClienteConfiguracions)
+                .HasForeignKey(d => d.UsoCfdiDefault)
+                .HasConstraintName("FK_ClienteConfiguracion_cUsoCFDI");
+        });
+
+        modelBuilder.Entity<ClienteContacto>(entity =>
+        {
+            entity.ToTable("ClienteContacto");
+
+            entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
+            entity.Property(e => e.Email).HasMaxLength(150);
+            entity.Property(e => e.FechaCreacion).HasColumnType("datetime");
+            entity.Property(e => e.FechaModificacion).HasColumnType("datetime");
+            entity.Property(e => e.Nombre).HasMaxLength(150);
+            entity.Property(e => e.Puesto).HasMaxLength(150);
+            entity.Property(e => e.Telefono).HasMaxLength(150);
+            entity.Property(e => e.UsuarioCreacionId).HasMaxLength(50);
+            entity.Property(e => e.UsuarioMofificacionId).HasMaxLength(50);
+
+            entity.HasOne(d => d.Cliente).WithMany(p => p.ClienteContactos)
+                .HasForeignKey(d => d.ClienteId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ClienteContacto_Cliente");
+        });
+
+        modelBuilder.Entity<ClientePac>(entity =>
+        {
+            entity.ToTable("ClientePac");
+
+            entity.Property(e => e.Id).HasDefaultValueSql("(newsequentialid())");
+            entity.Property(e => e.FechaCreacion).HasColumnType("datetime");
+            entity.Property(e => e.FechaModificacion).HasColumnType("datetime");
+            entity.Property(e => e.IdExterno).HasMaxLength(150);
+            entity.Property(e => e.ProveedorPac)
+                .HasMaxLength(150)
+                .HasColumnName("ProveedorPAC");
+            entity.Property(e => e.UsuarioCreacionId).HasMaxLength(50);
+            entity.Property(e => e.UsuarioMofificacionId).HasMaxLength(50);
+
+            entity.HasOne(d => d.Cliente).WithMany(p => p.ClientePacs)
+                .HasForeignKey(d => d.ClienteId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ClientePac_Cliente");
         });
 
         modelBuilder.Entity<Cuentum>(entity =>

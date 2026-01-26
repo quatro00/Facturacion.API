@@ -10,7 +10,7 @@ namespace Facturacion.API.Services.Implementation
 
         public AesCryptoService(IConfiguration config)
         {
-            _key = Encoding.UTF8.GetBytes(config["Crypto:Key"]);
+            _key = Convert.FromBase64String(config["Crypto:Key"]);
         }
 
         public byte[] Encrypt(string plainText)
@@ -18,6 +18,8 @@ namespace Facturacion.API.Services.Implementation
             using var aes = Aes.Create();
             aes.Key = _key;
             aes.GenerateIV();
+            aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.PKCS7;
 
             using var encryptor = aes.CreateEncryptor();
             var plainBytes = Encoding.UTF8.GetBytes(plainText);
@@ -30,6 +32,8 @@ namespace Facturacion.API.Services.Implementation
         {
             using var aes = Aes.Create();
             aes.Key = _key;
+            aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.PKCS7;
 
             var iv = cipherBytes.Take(16).ToArray();
             var data = cipherBytes.Skip(16).ToArray();

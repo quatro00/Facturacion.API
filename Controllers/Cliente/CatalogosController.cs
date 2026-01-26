@@ -42,7 +42,7 @@ namespace Facturacion.API.Controllers.Cliente
 
         [Authorize(Roles = "Cliente")]
         [HttpGet("GetMunicipio")]
-        public async Task<IActionResult> GetMunicipio(string codigoPostal)
+        public async Task<IActionResult> GetMunicipio([FromQuery] string codigoPostal)
         {
             var spec = new CCodigoPostalSpecification(codigoPostal);
             var data = await this._repoCodigoPostal.ListAsync(spec);

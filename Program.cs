@@ -7,6 +7,8 @@ using Facturacion.API.Repositories.Interface;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Facturacion.API.Services.Implementation;
+using Facturacion.API.Services.Interface;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,6 +32,8 @@ builder.Services.AddDbContext<AuthDbContext>(options =>
 //builder.Services.AddScoped<GenericService>();
 builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped<ITokenRepository, TokenRepository>();
+builder.Services.AddScoped<ICryptoService, AesCryptoService>();
+builder.Services.AddScoped<IPerfilService, PerfilService>();
 //builder.Services.AddScoped<IOrganizacionRepository, OrganizacionRepository>();
 //builder.Services.AddScoped<IConceptoRepository, ConceptoRepository>();
 //builder.Services.AddScoped<IReporteConceptoRepository, ReporteConceptoRepository>();
