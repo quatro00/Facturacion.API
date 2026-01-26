@@ -13,9 +13,9 @@ public partial class ClienteConfiguracion
 
     public string? FormaPago { get; set; }
 
-    public string Moneda { get; set; } = null!;
+    public string? Moneda { get; set; }
 
-    public string Exportacion { get; set; } = null!;
+    public string? Exportacion { get; set; }
 
     public string? UsoCfdiDefault { get; set; }
 
@@ -31,13 +31,13 @@ public partial class ClienteConfiguracion
 
     public virtual Cliente Cliente { get; set; } = null!;
 
-    public virtual CExportacion ExportacionNavigation { get; set; } = null!;
+    public virtual CExportacion? ExportacionNavigation { get; set; }
 
     public virtual CFormaPago? FormaPagoNavigation { get; set; }
 
     public virtual CMetodoPago? MetodoPagoNavigation { get; set; }
 
-    public virtual CMonedum MonedaNavigation { get; set; } = null!;
+    public virtual CMonedum? MonedaNavigation { get; set; }
 
     public virtual CUsoCfdi? UsoCfdiDefaultNavigation { get; set; }
 }

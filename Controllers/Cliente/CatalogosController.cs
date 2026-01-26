@@ -17,16 +17,31 @@ namespace Facturacion.API.Controllers.Cliente
     {
         private readonly IGenericRepository<CRegimenFiscal> _repoRegimenFiscal;
         private readonly IGenericRepository<CCodigoPostal> _repoCodigoPostal;
+        private readonly IGenericRepository<CMetodoPago> _repoMetodoPgo;
+        private readonly IGenericRepository<CFormaPago> _repoFormaPago;
+        private readonly IGenericRepository<CMonedum> _repoMoneda;
+        private readonly IGenericRepository<CExportacion> _repoExportacion;
+        private readonly IGenericRepository<CUsoCfdi> _repoUsoCfdi;
         private readonly IMapper _mapper;
 
         public CatalogosController(
             IMapper mapper,
             IGenericRepository<CRegimenFiscal> _repoRegimenFiscal,
-            IGenericRepository<CCodigoPostal> _repoCodigoPostal
+            IGenericRepository<CCodigoPostal> _repoCodigoPostal,
+            IGenericRepository<CMetodoPago> _repoMetodoPgo,
+            IGenericRepository<CFormaPago> _repoFormaPago,
+            IGenericRepository<CMonedum> _repoMoneda,
+            IGenericRepository<CExportacion> _repoExportacion,
+            IGenericRepository<CUsoCfdi> _repoUsoCfdi
             )
         {
             this._repoRegimenFiscal = _repoRegimenFiscal;
             this._repoCodigoPostal = _repoCodigoPostal;
+            this._repoMetodoPgo = _repoMetodoPgo;
+            this._repoFormaPago = _repoFormaPago;
+            this._repoMoneda = _repoMoneda;
+            this._repoExportacion = _repoExportacion;
+            this._repoUsoCfdi = _repoUsoCfdi;
             _mapper = mapper;
         }
 
@@ -57,6 +72,51 @@ namespace Facturacion.API.Controllers.Cliente
             }
 
             return Ok(res);
+        }
+
+        [Authorize(Roles = "Cliente")]
+        [HttpGet("GetMetodoPago")]
+        public async Task<IActionResult> GetMetodoPago()
+        {
+            var data = await this._repoMetodoPgo.ListAsync();
+            var dto = _mapper.Map<IEnumerable<GetMetodoPagoDto>>(data);
+            return Ok(dto);
+        }
+
+        [Authorize(Roles = "Cliente")]
+        [HttpGet("GetFormaPago")]
+        public async Task<IActionResult> GetFormaPago()
+        {
+            var data = await this._repoFormaPago.ListAsync();
+            var dto = _mapper.Map<IEnumerable<GetFormaPagoDto>>(data);
+            return Ok(dto);
+        }
+
+        [Authorize(Roles = "Cliente")]
+        [HttpGet("GetMoneda")]
+        public async Task<IActionResult> GetMoneda()
+        {
+            var data = await this._repoMoneda.ListAsync();
+            var dto = _mapper.Map<IEnumerable<GetMonedaDto>>(data);
+            return Ok(dto);
+        }
+
+        [Authorize(Roles = "Cliente")]
+        [HttpGet("GetExportacion")]
+        public async Task<IActionResult> GetExportacion()
+        {
+            var data = await this._repoExportacion.ListAsync();
+            var dto = _mapper.Map<IEnumerable<GetExportacionDto>>(data);
+            return Ok(dto);
+        }
+
+        [Authorize(Roles = "Cliente")]
+        [HttpGet("GetUsoCfdi")]
+        public async Task<IActionResult> GetUsoCfdi()
+        {
+            var data = await this._repoUsoCfdi.ListAsync();
+            var dto = _mapper.Map<IEnumerable<GetUsoCfdiDto>>(data);
+            return Ok(dto);
         }
     }
 }

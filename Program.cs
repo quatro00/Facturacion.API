@@ -34,6 +34,7 @@ builder.Services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepositor
 builder.Services.AddScoped<ITokenRepository, TokenRepository>();
 builder.Services.AddScoped<ICryptoService, AesCryptoService>();
 builder.Services.AddScoped<IPerfilService, PerfilService>();
+builder.Services.AddScoped<IClienteService, ClienteService>();
 //builder.Services.AddScoped<IOrganizacionRepository, OrganizacionRepository>();
 //builder.Services.AddScoped<IConceptoRepository, ConceptoRepository>();
 //builder.Services.AddScoped<IReporteConceptoRepository, ReporteConceptoRepository>();

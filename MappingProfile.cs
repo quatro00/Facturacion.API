@@ -9,8 +9,13 @@ namespace Facturacion.API
     {
         public MappingProfile()
         {
-            //organizacion
+            //catalogos
             CreateMap<CRegimenFiscal, ClienteGetRegimenFiscal>();
+            CreateMap<CMetodoPago, GetMetodoPagoDto>();
+            CreateMap<CFormaPago, GetFormaPagoDto>();
+            CreateMap<CMonedum, GetMonedaDto>();
+            CreateMap<CExportacion, GetExportacionDto>();
+            CreateMap<CUsoCfdi, GetUsoCfdiDto>();
 
             //organizacion
             CreateMap<RazonSocial, GetRazonSocialResponse>()

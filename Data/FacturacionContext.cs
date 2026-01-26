@@ -394,7 +394,6 @@ public partial class FacturacionContext : DbContext
 
             entity.HasOne(d => d.ExportacionNavigation).WithMany(p => p.ClienteConfiguracions)
                 .HasForeignKey(d => d.Exportacion)
-                .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_ClienteConfiguracion_cExportacion");
 
             entity.HasOne(d => d.FormaPagoNavigation).WithMany(p => p.ClienteConfiguracions)
@@ -407,7 +406,6 @@ public partial class FacturacionContext : DbContext
 
             entity.HasOne(d => d.MonedaNavigation).WithMany(p => p.ClienteConfiguracions)
                 .HasForeignKey(d => d.Moneda)
-                .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_ClienteConfiguracion_cMoneda");
 
             entity.HasOne(d => d.UsoCfdiDefaultNavigation).WithMany(p => p.ClienteConfiguracions)
