@@ -7,5 +7,6 @@
         public string RazonSocial { get; set; }
         public string UsoCfdi { get; set; }
         public string Moneda { get; set; }
+        public bool Activo { get; set; }
     }
 }

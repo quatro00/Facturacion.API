@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using Facturacion.API.Models.Domain;
 using Facturacion.API.Models.Dto.Cliente.Catalogos;
+using Facturacion.API.Models.Dto.Cliente.Cliente;
 using Facturacion.API.Models.Dto.Cliente.Perfil;
 
 namespace Facturacion.API
