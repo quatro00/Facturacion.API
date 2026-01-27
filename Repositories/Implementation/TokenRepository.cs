@@ -44,7 +44,7 @@ namespace Facturacion.API.Repositories.Implementation
                     issuer: configuration["Jwt:Issuer"],
                     audience: configuration["Jwt:Audience"],
                     claims: claims,
-                    expires: DateTime.Now.AddMinutes(60),
+                    expires: DateTime.Now.AddMinutes(600),
                     signingCredentials: credentials
                 );
 

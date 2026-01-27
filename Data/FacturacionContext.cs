@@ -30,7 +30,11 @@ public partial class FacturacionContext : DbContext
 
     public virtual DbSet<AspNetUserToken> AspNetUserTokens { get; set; }
 
+    public virtual DbSet<CClaveUnidad> CClaveUnidads { get; set; }
+
     public virtual DbSet<CCodigoPostal> CCodigoPostals { get; set; }
+
+    public virtual DbSet<CConcepto> CConceptos { get; set; }
 
     public virtual DbSet<CExportacion> CExportacions { get; set; }
 
@@ -145,6 +149,20 @@ public partial class FacturacionContext : DbContext
             entity.HasOne(d => d.User).WithMany(p => p.AspNetUserTokens).HasForeignKey(d => d.UserId);
         });
 
+        modelBuilder.Entity<CClaveUnidad>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToTable("cClaveUnidad");
+
+            entity.Property(e => e.CClaveUnidad1)
+                .HasMaxLength(50)
+                .HasColumnName("cClaveUnidad");
+            entity.Property(e => e.Descripcion).HasMaxLength(550);
+            entity.Property(e => e.Nombre).HasMaxLength(200);
+            entity.Property(e => e.Nota).HasMaxLength(250);
+        });
+
         modelBuilder.Entity<CCodigoPostal>(entity =>
         {
             entity.ToTable("cCodigoPostal");
@@ -196,6 +214,25 @@ public partial class FacturacionContext : DbContext
             entity.Property(e => e.IdAsentaCpcons)
                 .HasMaxLength(150)
                 .HasColumnName("id_asenta_cpcons");
+        });
+
+        modelBuilder.Entity<CConcepto>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToTable("cConceptos");
+
+            entity.HasIndex(e => e.CClaveProdServ, "IX_CConceptos_CClaveProdServ");
+
+            entity.Property(e => e.CClaveProdServ)
+                .HasMaxLength(50)
+                .HasColumnName("cClaveProdServ");
+            entity.Property(e => e.Complemento).HasMaxLength(1);
+            entity.Property(e => e.Descripcion).HasMaxLength(400);
+            entity.Property(e => e.IncluirIepsTrasladado).HasMaxLength(50);
+            entity.Property(e => e.IncluirIvaTrasladado).HasMaxLength(50);
+            entity.Property(e => e.VigenciaInicio).HasColumnType("date");
+            entity.Property(e => e.VigenciaTermino).HasMaxLength(1);
         });
 
         modelBuilder.Entity<CExportacion>(entity =>

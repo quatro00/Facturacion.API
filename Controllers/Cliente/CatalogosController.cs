@@ -4,6 +4,7 @@ using Facturacion.API.Models.Domain;
 using Facturacion.API.Models.Dto.Cliente.Catalogos;
 using Facturacion.API.Models.Specifications;
 using Facturacion.API.Repositories.Interface;
+using Facturacion.API.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -22,6 +23,7 @@ namespace Facturacion.API.Controllers.Cliente
         private readonly IGenericRepository<CMonedum> _repoMoneda;
         private readonly IGenericRepository<CExportacion> _repoExportacion;
         private readonly IGenericRepository<CUsoCfdi> _repoUsoCfdi;
+        private readonly ICatalogoService _catalogoService;
         private readonly IMapper _mapper;
 
         public CatalogosController(
@@ -32,7 +34,8 @@ namespace Facturacion.API.Controllers.Cliente
             IGenericRepository<CFormaPago> _repoFormaPago,
             IGenericRepository<CMonedum> _repoMoneda,
             IGenericRepository<CExportacion> _repoExportacion,
-            IGenericRepository<CUsoCfdi> _repoUsoCfdi
+            IGenericRepository<CUsoCfdi> _repoUsoCfdi,
+            ICatalogoService _catalogoService
             )
         {
             this._repoRegimenFiscal = _repoRegimenFiscal;
@@ -42,6 +45,7 @@ namespace Facturacion.API.Controllers.Cliente
             this._repoMoneda = _repoMoneda;
             this._repoExportacion = _repoExportacion;
             this._repoUsoCfdi = _repoUsoCfdi;
+            this._catalogoService = _catalogoService;
             _mapper = mapper;
         }
 
@@ -117,6 +121,20 @@ namespace Facturacion.API.Controllers.Cliente
             var data = await this._repoUsoCfdi.ListAsync();
             var dto = _mapper.Map<IEnumerable<GetUsoCfdiDto>>(data);
             return Ok(dto);
+        }
+
+        [HttpGet("GetConceptos")]
+        public async Task<IActionResult> GetConceptos([FromQuery] string search, [FromQuery] int take = 20)
+        {
+            var data = await _catalogoService.BuscarConceptosAsync(search, take);
+            return Ok(data);
+        }
+
+        [HttpGet("GetClaveUnidad")]
+        public async Task<IActionResult> GetClaveUnidad([FromQuery] string search, [FromQuery] int take = 20)
+        {
+            var data = await _catalogoService.BuscarClavesUnidadAsync(search, take);
+            return Ok(data);
         }
     }
 }
