@@ -165,6 +165,17 @@ namespace Facturacion.API.Controllers.Cliente
             });
         }
 
+        [Authorize(Roles = "Cliente")]
+        [HttpPost("SubirSellosAFacturama")]
+        public async Task<IActionResult> SubirSellosAFacturama([FromQuery] bool force = false, CancellationToken ct = default)
+        {
+            var cuentaId = Guid.Parse(User.GetCuentaId());
+            force = true;
+            await perfilService.SubirSellosAFacturamaAsync(cuentaId, force, ct);
+
+            return Ok(new { message = "Sellos sincronizados con Facturama correctamente" });
+        }
+
         [HttpGet("DescargarSellos")]
         public async Task<IActionResult> DescargarSellos()
         {

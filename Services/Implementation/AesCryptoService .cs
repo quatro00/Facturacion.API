@@ -44,5 +44,24 @@ namespace Facturacion.API.Services.Implementation
 
             return Encoding.UTF8.GetString(plainBytes);
         }
+
+        public byte[] DecryptToByte(byte[] cipherBytes)
+        {
+            using var aes = Aes.Create();
+            aes.Key = _key;
+            aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.PKCS7;
+
+            // IV = primeros 16 bytes
+            var iv = cipherBytes.Take(16).ToArray();
+            var data = cipherBytes.Skip(16).ToArray();
+
+            aes.IV = iv;
+
+            using var decryptor = aes.CreateDecryptor();
+            var plainBytes = decryptor.TransformFinalBlock(data, 0, data.Length);
+
+            return plainBytes; // 👈 bytes reales
+        }
     }
 }

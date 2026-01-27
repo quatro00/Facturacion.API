@@ -13,6 +13,8 @@ public partial class Cuentum
 
     public DateTime FechaRegistro { get; set; }
 
+    public virtual ICollection<Cfdi> Cfdis { get; set; } = new List<Cfdi>();
+
     public virtual ICollection<Cliente> Clientes { get; set; } = new List<Cliente>();
 
     public virtual ICollection<RazonSocial> RazonSocials { get; set; } = new List<RazonSocial>();

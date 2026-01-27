@@ -48,6 +48,16 @@ public partial class FacturacionContext : DbContext
 
     public virtual DbSet<CUsoCfdi> CUsoCfdis { get; set; }
 
+    public virtual DbSet<Cfdi> Cfdis { get; set; }
+
+    public virtual DbSet<CfdiConcepto> CfdiConceptos { get; set; }
+
+    public virtual DbSet<CfdiConceptoImpuesto> CfdiConceptoImpuestos { get; set; }
+
+    public virtual DbSet<CfdiEstatusHistorial> CfdiEstatusHistorials { get; set; }
+
+    public virtual DbSet<CfdiRaw> CfdiRaws { get; set; }
+
     public virtual DbSet<Cliente> Clientes { get; set; }
 
     public virtual DbSet<ClienteConfiguracion> ClienteConfiguracions { get; set; }
@@ -154,6 +164,8 @@ public partial class FacturacionContext : DbContext
             entity
                 .HasNoKey()
                 .ToTable("cClaveUnidad");
+
+            entity.HasIndex(e => e.CClaveUnidad1, "IX_CClaveUnidad_CClaveUnidad");
 
             entity.Property(e => e.CClaveUnidad1)
                 .HasMaxLength(50)
@@ -360,6 +372,162 @@ public partial class FacturacionContext : DbContext
             entity.Property(e => e.InicioVigencia).HasColumnType("datetime");
             entity.Property(e => e.RegimenReceptor).HasMaxLength(450);
             entity.Property(e => e.TerminoVigencia).HasColumnType("datetime");
+        });
+
+        modelBuilder.Entity<Cfdi>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__Cfdi__3214EC071EC437D1");
+
+            entity.ToTable("Cfdi");
+
+            entity.HasIndex(e => new { e.ClienteId, e.FechaTimbrado }, "IX_Cfdi_Cliente_Fecha");
+
+            entity.HasIndex(e => new { e.CuentaId, e.FechaTimbrado }, "IX_Cfdi_Cuenta_Fecha");
+
+            entity.HasIndex(e => new { e.CuentaId, e.Serie, e.Folio }, "IX_Cfdi_Cuenta_SerieFolio");
+
+            entity.HasIndex(e => new { e.Serie, e.Folio }, "IX_Cfdi_SerieFolio");
+
+            entity.HasIndex(e => e.Uuid, "IX_Cfdi_Uuid").IsUnique();
+
+            entity.HasIndex(e => new { e.CuentaId, e.Uuid }, "UX_Cfdi_Cuenta_Uuid").IsUnique();
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
+            entity.Property(e => e.Descuento).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.Estatus).HasMaxLength(20);
+            entity.Property(e => e.Folio).HasMaxLength(20);
+            entity.Property(e => e.FormaPago)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .IsFixedLength();
+            entity.Property(e => e.LugarExpedicion)
+                .HasMaxLength(5)
+                .IsUnicode(false)
+                .IsFixedLength();
+            entity.Property(e => e.MetodoPago)
+                .HasMaxLength(3)
+                .IsUnicode(false)
+                .IsFixedLength();
+            entity.Property(e => e.Moneda)
+                .HasMaxLength(3)
+                .IsUnicode(false)
+                .IsFixedLength();
+            entity.Property(e => e.Pac).HasMaxLength(50);
+            entity.Property(e => e.RfcEmisor)
+                .HasMaxLength(13)
+                .IsUnicode(false)
+                .IsFixedLength();
+            entity.Property(e => e.RfcReceptor)
+                .HasMaxLength(13)
+                .IsUnicode(false)
+                .IsFixedLength();
+            entity.Property(e => e.Serie).HasMaxLength(10);
+            entity.Property(e => e.Subtotal).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.TipoCfdi)
+                .HasMaxLength(1)
+                .IsUnicode(false)
+                .IsFixedLength();
+            entity.Property(e => e.Total).HasColumnType("decimal(18, 2)");
+
+            entity.HasOne(d => d.Cliente).WithMany(p => p.Cfdis)
+                .HasForeignKey(d => d.ClienteId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Cfdi_Cliente");
+
+            entity.HasOne(d => d.Cuenta).WithMany(p => p.Cfdis)
+                .HasForeignKey(d => d.CuentaId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Cfdi_Cuenta");
+        });
+
+        modelBuilder.Entity<CfdiConcepto>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__CfdiConc__3214EC0799B64317");
+
+            entity.ToTable("CfdiConcepto");
+
+            entity.HasIndex(e => new { e.CuentaId, e.CfdiId }, "IX_CfdiConcepto_Cuenta_Cfdi");
+
+            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.Cantidad).HasColumnType("decimal(18, 4)");
+            entity.Property(e => e.ClaveProdServ)
+                .HasMaxLength(8)
+                .IsUnicode(false)
+                .IsFixedLength();
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
+            entity.Property(e => e.Descripcion).HasMaxLength(500);
+            entity.Property(e => e.ObjetoImp)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .IsFixedLength();
+            entity.Property(e => e.Subtotal).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.Total).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ValorUnitario).HasColumnType("decimal(18, 6)");
+
+            entity.HasOne(d => d.Cfdi).WithMany(p => p.CfdiConceptos)
+                .HasForeignKey(d => d.CfdiId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_CfdiConcepto_Cfdi");
+        });
+
+        modelBuilder.Entity<CfdiConceptoImpuesto>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__CfdiConc__3214EC07BD1E8B90");
+
+            entity.ToTable("CfdiConceptoImpuesto");
+
+            entity.HasIndex(e => new { e.CuentaId, e.CfdiConceptoId }, "IX_CfdiConceptoImp_Cuenta_Concepto");
+
+            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.Base).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
+            entity.Property(e => e.Importe).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.Tasa).HasColumnType("decimal(10, 6)");
+            entity.Property(e => e.TipoImpuesto).HasMaxLength(10);
+
+            entity.HasOne(d => d.CfdiConcepto).WithMany(p => p.CfdiConceptoImpuestos)
+                .HasForeignKey(d => d.CfdiConceptoId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_CfdiConceptoImpuesto_Concepto");
+        });
+
+        modelBuilder.Entity<CfdiEstatusHistorial>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__CfdiEsta__3214EC077A433924");
+
+            entity.ToTable("CfdiEstatusHistorial");
+
+            entity.HasIndex(e => new { e.CuentaId, e.CfdiId }, "IX_CfdiEstatus_Cuenta_Cfdi");
+
+            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
+            entity.Property(e => e.Estatus).HasMaxLength(20);
+            entity.Property(e => e.Motivo).HasMaxLength(250);
+
+            entity.HasOne(d => d.Cfdi).WithMany(p => p.CfdiEstatusHistorials)
+                .HasForeignKey(d => d.CfdiId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_CfdiEstatus_Cfdi");
+        });
+
+        modelBuilder.Entity<CfdiRaw>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__CfdiRaw__3214EC0770D9CC07");
+
+            entity.ToTable("CfdiRaw");
+
+            entity.HasIndex(e => new { e.CuentaId, e.CfdiId }, "UX_CfdiRaw_Cuenta_Cfdi").IsUnique();
+
+            entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
+            entity.Property(e => e.PdfPath).HasMaxLength(500);
+            entity.Property(e => e.XmlPath).HasMaxLength(500);
+
+            entity.HasOne(d => d.Cfdi).WithMany(p => p.CfdiRaws)
+                .HasForeignKey(d => d.CfdiId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_CfdiRaw_Cfdi");
         });
 
         modelBuilder.Entity<Cliente>(entity =>

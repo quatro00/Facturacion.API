@@ -4,5 +4,6 @@
     {
         byte[] Encrypt(string plainText);
         string Decrypt(byte[] cipherBytes);
+        byte[] DecryptToByte(byte[] cipherBytes);
     }
 }

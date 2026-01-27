@@ -45,6 +45,8 @@ public partial class Cliente
 
     public string? UsuarioModificacion { get; set; }
 
+    public virtual ICollection<Cfdi> Cfdis { get; set; } = new List<Cfdi>();
+
     public virtual ICollection<ClienteConfiguracion> ClienteConfiguracions { get; set; } = new List<ClienteConfiguracion>();
 
     public virtual ICollection<ClienteContacto> ClienteContactos { get; set; } = new List<ClienteContacto>();

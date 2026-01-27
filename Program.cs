@@ -9,6 +9,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Facturacion.API.Services.Implementation;
 using Facturacion.API.Services.Interface;
+using System.Net.Http.Headers;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,7 +38,7 @@ builder.Services.AddScoped<ICryptoService, AesCryptoService>();
 builder.Services.AddScoped<IPerfilService, PerfilService>();
 builder.Services.AddScoped<IClienteService, ClienteService>();
 builder.Services.AddScoped<ICatalogoService, CatalogoService>();
-//builder.Services.AddScoped<IConceptoRepository, ConceptoRepository>();
+builder.Services.AddScoped<IFacturacionService, FacturacionService>();
 //builder.Services.AddScoped<IReporteConceptoRepository, ReporteConceptoRepository>();
 
 builder.Services.AddAutoMapper(typeof(MappingProfile));
@@ -55,6 +57,16 @@ builder.Services.Configure<IdentityOptions>(options => {
     options.Password.RequiredUniqueChars = 1;
 });
 
+builder.Services.AddHttpClient<IFacturamaClient, FacturamaClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Facturama:BaseUrl"]!); // sandbox/prod
+    client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+    var user = builder.Configuration["Facturama:User"]!;
+    var pass = builder.Configuration["Facturama:Password"]!;
+    var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{user}:{pass}"));
+    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", basic);
+});
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options => {

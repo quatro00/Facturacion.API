@@ -123,6 +123,7 @@ namespace Facturacion.API.Controllers.Cliente
             return Ok(dto);
         }
 
+        [Authorize(Roles = "Cliente")]
         [HttpGet("GetConceptos")]
         public async Task<IActionResult> GetConceptos([FromQuery] string search, [FromQuery] int take = 20)
         {
@@ -130,6 +131,7 @@ namespace Facturacion.API.Controllers.Cliente
             return Ok(data);
         }
 
+        [Authorize(Roles = "Cliente")]
         [HttpGet("GetClaveUnidad")]
         public async Task<IActionResult> GetClaveUnidad([FromQuery] string search, [FromQuery] int take = 20)
         {
