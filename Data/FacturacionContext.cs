@@ -58,6 +58,8 @@ public partial class FacturacionContext : DbContext
 
     public virtual DbSet<CfdiRaw> CfdiRaws { get; set; }
 
+    public virtual DbSet<CfdiStatus> CfdiStatuses { get; set; }
+
     public virtual DbSet<Cliente> Clientes { get; set; }
 
     public virtual DbSet<ClienteConfiguracion> ClienteConfiguracions { get; set; }
@@ -384,18 +386,24 @@ public partial class FacturacionContext : DbContext
 
             entity.HasIndex(e => new { e.CuentaId, e.FechaTimbrado }, "IX_Cfdi_Cuenta_Fecha");
 
+            entity.HasIndex(e => new { e.CuentaId, e.FechaTimbrado, e.Estatus }, "IX_Cfdi_Cuenta_Fecha_Estatus");
+
             entity.HasIndex(e => new { e.CuentaId, e.Serie, e.Folio }, "IX_Cfdi_Cuenta_SerieFolio");
 
             entity.HasIndex(e => new { e.Serie, e.Folio }, "IX_Cfdi_SerieFolio");
 
             entity.HasIndex(e => e.Uuid, "IX_Cfdi_Uuid").IsUnique();
 
+            entity.HasIndex(e => new { e.CuentaId, e.FacturamaId }, "UX_Cfdi_Cuenta_FacturamaId").IsUnique();
+
             entity.HasIndex(e => new { e.CuentaId, e.Uuid }, "UX_Cfdi_Cuenta_Uuid").IsUnique();
 
             entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.CfdiStatusId).HasDefaultValueSql("((2))");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
             entity.Property(e => e.Descuento).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.Estatus).HasMaxLength(20);
+            entity.Property(e => e.EstatusCancelacionSat).HasMaxLength(30);
             entity.Property(e => e.FacturamaId).HasMaxLength(50);
             entity.Property(e => e.Folio).HasMaxLength(20);
             entity.Property(e => e.FormaPago)
@@ -414,7 +422,13 @@ public partial class FacturacionContext : DbContext
                 .HasMaxLength(3)
                 .IsUnicode(false)
                 .IsFixedLength();
+            entity.Property(e => e.MotivoCancelacion)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .IsFixedLength();
             entity.Property(e => e.Pac).HasMaxLength(50);
+            entity.Property(e => e.RazonSocialEmisor).HasMaxLength(150);
+            entity.Property(e => e.RazonSocialReceptor).HasMaxLength(150);
             entity.Property(e => e.RfcEmisor)
                 .HasMaxLength(13)
                 .IsUnicode(false)
@@ -430,6 +444,11 @@ public partial class FacturacionContext : DbContext
                 .IsUnicode(false)
                 .IsFixedLength();
             entity.Property(e => e.Total).HasColumnType("decimal(18, 2)");
+
+            entity.HasOne(d => d.CfdiStatus).WithMany(p => p.Cfdis)
+                .HasForeignKey(d => d.CfdiStatusId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Cfdi_CfdiStatus");
 
             entity.HasOne(d => d.Cliente).WithMany(p => p.Cfdis)
                 .HasForeignKey(d => d.ClienteId)
@@ -529,6 +548,17 @@ public partial class FacturacionContext : DbContext
                 .HasForeignKey(d => d.CfdiId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_CfdiRaw_Cfdi");
+        });
+
+        modelBuilder.Entity<CfdiStatus>(entity =>
+        {
+            entity.ToTable("CfdiStatus");
+
+            entity.HasIndex(e => e.Clave, "UQ_CfdiStatus_Clave").IsUnique();
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.Clave).HasMaxLength(30);
+            entity.Property(e => e.Descripcion).HasMaxLength(100);
         });
 
         modelBuilder.Entity<Cliente>(entity =>

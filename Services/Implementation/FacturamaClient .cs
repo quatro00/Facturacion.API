@@ -6,7 +6,7 @@ using System.Text.Json;
 
 namespace Facturacion.API.Services.Implementation
 {
-    public class FacturamaClient : IFacturamaClient
+    public sealed class FacturamaClient : IFacturamaClient
     {
         private readonly HttpClient _http;
 
@@ -86,6 +86,49 @@ namespace Facturacion.API.Services.Implementation
                 throw new InvalidOperationException($"error: {(int)resp.StatusCode} - {body}");
 
             return (JsonDocument.Parse(body), body);
+        }
+
+        // Facturama: GET api/Cfdi/{format}/{type}/{id} -> FileViewModel (base64)
+        public async Task<FacturamaFileViewModel> DownloadCfdiAsync(string id, string format, string type, CancellationToken ct)
+        {
+            // Ej: api/Cfdi/pdf/issued/{id}
+            var url = $"api/Cfdi/{format}/{type}/{id}";
+            var resp = await _http.GetAsync(url, ct);
+            resp.EnsureSuccessStatusCode();
+
+            var vm = await resp.Content.ReadFromJsonAsync<FacturamaFileViewModel>(cancellationToken: ct);
+            if (vm is null || string.IsNullOrWhiteSpace(vm.Content))
+                throw new InvalidOperationException("Facturama devolvió respuesta vacía al descargar el archivo.");
+
+            return vm;
+        }
+
+        // Facturama: GET cfdi/zip?id={id}&type={type}
+        // OJO: algunos entornos responden JSON; otros responden directamente binario.
+        public async Task<byte[]> DownloadZipAsync(string id, string type, CancellationToken ct)
+        {
+            var url = $"cfdi/zip?id={Uri.EscapeDataString(id)}&type={Uri.EscapeDataString(type)}";
+            var resp = await _http.GetAsync(url, ct);
+            resp.EnsureSuccessStatusCode();
+            return await resp.Content.ReadAsByteArrayAsync(ct);
+        }
+
+        public async Task<CancelCfdiResultDto> CancelCfdiAsync(string facturamaId, string type, string motive, Guid? uuidReplacement, CancellationToken ct)
+        {
+            // /api-lite/cfdis/{id}?motive=..&uuidReplacement=..
+            var url = $"api-lite/cfdis/{Uri.EscapeDataString(facturamaId)}?motive={Uri.EscapeDataString(motive)}";
+
+            if (uuidReplacement is not null)
+                url += $"&uuidReplacement={uuidReplacement.Value:D}";
+
+            using var req = new HttpRequestMessage(HttpMethod.Delete, url);
+            using var resp = await _http.SendAsync(req, ct);
+            resp.EnsureSuccessStatusCode();
+
+            var result = await resp.Content.ReadFromJsonAsync<CancelCfdiResultDto>(cancellationToken: ct);
+            if (result is null) throw new InvalidOperationException("Respuesta vacía de Facturama al cancelar CFDI.");
+
+            return result;
         }
     }
 }

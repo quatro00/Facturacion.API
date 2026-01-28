@@ -25,6 +25,7 @@ namespace Facturacion.API.Controllers.Cliente
             return Ok(result.RootElement); // o mapear a tu propio DTO
         }
 
+
         [HttpGet("GetFacturas")]
         public async Task<ActionResult<PagedResult<FacturaListItemDto>>> GetFacturas(
         [FromQuery] GetFacturasQuery query,
@@ -32,6 +33,41 @@ namespace Facturacion.API.Controllers.Cliente
         {
             var cuentaId = Guid.Parse(User.GetCuentaId());
             var result = await _facturacionService.GetFacturasAsync(cuentaId, query, ct);
+            return Ok(result);
+        }
+
+        [HttpGet("{id}/xml")]
+        public async Task<IActionResult> DownloadXml(string id, [FromQuery] string type = "issuedLite", CancellationToken ct = default)
+        {
+            type = "issuedLite";
+            var (bytes, filename, contentType) = await _facturacionService.GetXmlAsync(id, type, ct);
+            return File(bytes, contentType, filename);
+        }
+
+        // GET api/facturas/{id}/pdf?type=issued
+        [HttpGet("{id}/pdf")]
+        public async Task<IActionResult> DownloadPdf(string id, [FromQuery] string type = "issuedLite", CancellationToken ct = default)
+        {
+            type = "issuedLite";
+            var (bytes, filename, contentType) = await _facturacionService.GetPdfAsync(id, type, ct);
+            return File(bytes, contentType, filename);
+        }
+
+        // GET api/facturas/{id}/zip?type=issued
+        [HttpGet("{id}/zip")]
+        public async Task<IActionResult> DownloadZip(string id, [FromQuery] string type = "issuedLite", CancellationToken ct = default)
+        {
+            var (bytes, filename, contentType) = await _facturacionService.GetZipAsync(id, type, ct);
+            return File(bytes, contentType, filename);
+        }
+
+        [HttpPost("{id:guid}/cancel")]
+        public async Task<IActionResult> Cancelar(Guid id, [FromBody] CancelCfdiRequestDto req, CancellationToken ct)
+        {
+            // cuentaId: sácalo del JWT/claims (o como lo manejes)
+            var cuentaId = Guid.Parse(User.GetCuentaId());
+
+            var result = await _facturacionService.CancelarCfdiAsync(id, cuentaId, req, ct);
             return Ok(result);
         }
     }

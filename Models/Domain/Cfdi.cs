@@ -39,19 +39,39 @@ public partial class Cfdi
 
     public string RfcReceptor { get; set; } = null!;
 
+    public string? RazonSocialEmisor { get; set; }
+
+    public string? RazonSocialReceptor { get; set; }
+
     public string Pac { get; set; } = null!;
 
     public string Estatus { get; set; } = null!;
 
     public DateTime CreatedAt { get; set; }
 
-    public string? FacturamaId { get; set; }
+    public string FacturamaId { get; set; } = null!;
+
+    public string? MotivoCancelacion { get; set; }
+
+    public Guid? UuidSustitucion { get; set; }
+
+    public DateTime? FechaSolicitudCancel { get; set; }
+
+    public DateTime? FechaCancelacion { get; set; }
+
+    public string? EstatusCancelacionSat { get; set; }
+
+    public string? AcuseCancelacionXml { get; set; }
+
+    public int CfdiStatusId { get; set; }
 
     public virtual ICollection<CfdiConcepto> CfdiConceptos { get; set; } = new List<CfdiConcepto>();
 
     public virtual ICollection<CfdiEstatusHistorial> CfdiEstatusHistorials { get; set; } = new List<CfdiEstatusHistorial>();
 
     public virtual ICollection<CfdiRaw> CfdiRaws { get; set; } = new List<CfdiRaw>();
+
+    public virtual CfdiStatus CfdiStatus { get; set; } = null!;
 
     public virtual Cliente Cliente { get; set; } = null!;
 

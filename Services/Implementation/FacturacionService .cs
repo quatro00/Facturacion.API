@@ -2,6 +2,7 @@
 using Facturacion.API.Models.Domain;
 using Facturacion.API.Models.Dto;
 using Facturacion.API.Models.Dto.Cliente.Factura;
+using Facturacion.API.Models.Dto.Constants;
 using Facturacion.API.Services.Interface;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -390,6 +391,149 @@ namespace Facturacion.API.Services.Implementation
             {
                 Items = items,
                 Total = total
+            };
+        }
+
+        public async Task<(byte[] bytes, string filename, string contentType)> GetXmlAsync(string id, string type, CancellationToken ct)
+        => await DownloadBase64Async(id, "xml", type, "application/xml", ".xml", ct);
+
+        public async Task<(byte[] bytes, string filename, string contentType)> GetPdfAsync(string id, string type, CancellationToken ct)
+            => await DownloadBase64Async(id, "pdf", type, "application/pdf", ".pdf", ct);
+
+        public async Task<(byte[] bytes, string filename, string contentType)> GetZipAsync(string id, string type, CancellationToken ct)
+        {
+            var bytes = await _facturama.DownloadZipAsync(id, type, ct);
+            var filename = $"CFDI_{id}.zip";
+            return (bytes, filename, "application/zip");
+        }
+
+        private async Task<(byte[] bytes, string filename, string contentType)> DownloadBase64Async(
+        string id, string format, string type, string mime, string ext, CancellationToken ct)
+        {
+            var vm = await _facturama.DownloadCfdiAsync(id, format, type, ct);
+
+            // vm.Content es base64
+            byte[] bytes;
+            try
+            {
+                bytes = Convert.FromBase64String(vm.Content!);
+            }
+            catch (FormatException)
+            {
+                throw new InvalidOperationException("El contenido recibido no es Base64 válido.");
+            }
+
+            var filename = $"CFDI_{id}{ext}";
+            return (bytes, filename, mime);
+        }
+
+        public async Task<CancelCfdiResultDto> CancelarCfdiAsync(
+    Guid cfdiId,
+    Guid cuentaId,
+    CancelCfdiRequestDto req,
+    CancellationToken ct = default)
+        {
+            if (req is null)
+                throw new ArgumentNullException(nameof(req));
+
+            // 1) Validaciones SAT
+            var motive = (req.Motive ?? "02").Trim();
+            if (motive is not ("01" or "02" or "03" or "04"))
+                throw new InvalidOperationException("Motivo inválido. Usa 01, 02, 03 o 04.");
+
+            if (motive == "01" && req.UuidReplacement is null)
+                throw new InvalidOperationException("UuidReplacement es requerido cuando Motive = 01.");
+
+            // 2) Traer CFDI (y status actual si tienes navegación)
+            var cfdi = await _context.Cfdis
+                .FirstOrDefaultAsync(x => x.Id == cfdiId && x.CuentaId == cuentaId, ct);
+
+            if (cfdi is null)
+                throw new KeyNotFoundException("CFDI no encontrado para la cuenta.");
+
+            if (string.IsNullOrWhiteSpace(cfdi.FacturamaId))
+                throw new InvalidOperationException("El CFDI no tiene FacturamaId.");
+
+            // 3) Obtener status actual desde catálogo para reglas
+            var statusActual = await _context.CfdiStatuses
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.Id == cfdi.CfdiStatusId, ct);
+
+            if (statusActual is null)
+                throw new InvalidOperationException("El CFDI tiene un CfdiStatusId inválido.");
+
+            if (statusActual.EsFinal)
+                throw new InvalidOperationException($"El CFDI no se puede cancelar. Estatus actual: {statusActual.Clave}");
+
+            if (statusActual.Clave == "CANCELACION_SOLICITADA")
+                throw new InvalidOperationException("La cancelación ya fue solicitada.");
+
+            // 4) Cancelar en Facturama
+            const string facturamaType = "issuedLite";
+
+            var result = await _facturama.CancelCfdiAsync(
+                facturamaId: cfdi.FacturamaId,
+                type: facturamaType,
+                motive: motive,
+                uuidReplacement: req.UuidReplacement,
+                ct: ct);
+
+            // 5) Mapear status Facturama → catálogo
+            var nuevoStatusId = result.Status?.ToLowerInvariant() switch
+            {
+                "canceled" or "cancelled" => CfdiStatusIds.CANCELADO,
+                "requested" => CfdiStatusIds.CANCELACION_SOLICITADA,
+                "rejected" => CfdiStatusIds.CANCELACION_RECHAZADA,
+                _ => CfdiStatusIds.ERROR_CANCELACION
+            };
+
+            // Traer la clave para guardarla en historial (porque tu historial es string)
+            var nuevoStatusClave = await _context.CfdiStatuses
+                .AsNoTracking()
+                .Where(s => s.Id == nuevoStatusId)
+                .Select(s => s.Clave)
+                .FirstAsync(ct);
+
+            // 6) Persistir en CFDI
+            cfdi.CfdiStatusId = nuevoStatusId;
+
+            cfdi.MotivoCancelacion = motive;
+            cfdi.UuidSustitucion = req.UuidReplacement;
+
+            cfdi.FechaSolicitudCancel = result.RequestDate ?? DateTime.UtcNow;
+            cfdi.FechaCancelacion = result.CancelationDate;
+
+            cfdi.EstatusCancelacionSat = result.Status;
+            cfdi.AcuseCancelacionXml = result.AcuseXmlBase64;
+
+            // (opcional) mantener columna legacy de Cfdi
+            cfdi.Estatus = nuevoStatusClave.Length > 20 ? nuevoStatusClave[..20] : nuevoStatusClave;
+
+            // 7) Insertar historial con tu estructura actual
+            _context.CfdiEstatusHistorials.Add(new CfdiEstatusHistorial
+            {
+                // Id y CreatedAt los llena SQL por default si tu entidad lo permite (si no, asigna aquí)
+                CfdiId = cfdi.Id,
+                CuentaId = cuentaId,
+                Estatus = nuevoStatusClave.Length > 20 ? nuevoStatusClave[..20] : nuevoStatusClave,
+                Motivo = $"Cancelación SAT motivo {motive}" + (req.UuidReplacement is null ? "" : $" | Sustituye: {req.UuidReplacement:D}")
+                // CreatedAt default en SQL
+            });
+
+            await _context.SaveChangesAsync(ct);
+
+            return result;
+        }
+
+        private static string MapEstatusLocal(string? facturamaStatus)
+        {
+            var s = (facturamaStatus ?? "").Trim().ToLowerInvariant();
+            return s switch
+            {
+                "canceled" or "cancelled" => "Cancelado",
+                "requested" => "CancelacionSolicitada",
+                "rejected" => "CancelacionRechazada",
+                _ => "CancelacionSolicitada"
             };
         }
     }
