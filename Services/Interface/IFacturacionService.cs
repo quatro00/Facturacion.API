@@ -14,5 +14,6 @@ namespace Facturacion.API.Services.Interface
         Task<(byte[] bytes, string filename, string contentType)> GetPdfAsync(string id, string type, CancellationToken ct);
         Task<(byte[] bytes, string filename, string contentType)> GetZipAsync(string id, string type, CancellationToken ct);
         Task<ReenviarCfdiResponseDto> ReenviarCfdiAsync(Guid cfdiId, Guid cuentaId, ReenviarCfdiRequestDto req, CancellationToken ct = default);
+        Task<CfdiDetalleDto> GetCfdiDetalleAsync(Guid cfdiId, Guid cuentaId, CancellationToken ct);
     }
 }

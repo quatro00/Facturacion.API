@@ -23,5 +23,9 @@ public partial class CfdiConceptoImpuesto
 
     public Guid CuentaId { get; set; }
 
+    public string? ImpuestoClave { get; set; }
+
+    public string? TipoFactor { get; set; }
+
     public virtual CfdiConcepto CfdiConcepto { get; set; } = null!;
 }

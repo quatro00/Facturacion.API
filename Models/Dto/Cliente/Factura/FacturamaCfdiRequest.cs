@@ -42,6 +42,9 @@
         public string Description { get; set; } = null!;
         public decimal Quantity { get; set; }
         public decimal UnitPrice { get; set; }
+        public decimal Discount { get; set; }
+        public string Unit { get; set; }
+        public string IdentificationNumber { get; set; }
         public decimal Subtotal { get; set; }
         public string TaxObject { get; set; } = "02";
         public List<FacturamaTax> Taxes { get; set; } = new();

@@ -301,13 +301,22 @@ namespace Facturacion.API.Services.Implementation
                         ClaveProdServ = it.ProductCode,
                         Descripcion = it.Description,
                         Cantidad = it.Quantity,
-                        ValorUnitario = it.UnitPrice,
+                        ValorUnitario = it.UnitPrice,          // o it.UnitValue si así se llama en tu request
 
+                        Descuento = it.Discount,               // ✅ NUEVO (si existe)
+                        ClaveUnidad = it.UnitCode,             // ✅ ya lo tienes
+                        Unidad = it.Unit,                      // ✅ NUEVO (si existe)
+                        NoIdentificacion = it.IdentificationNumber, // ✅ NUEVO (si existe)
+
+                        // Si tu Subtotal en request ya trae el importe antes de impuestos, úsalo:
                         Subtotal = it.Subtotal,
+
+                        // Total de concepto normalmente es el importe (sin impuestos) en muchos diseños,
+                        // pero tú ya lo manejas, así que respétalo:
                         Total = it.Total,
 
                         ObjetoImp = it.TaxObject,
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.UtcNow,
                     };
 
                     _context.CfdiConceptos.Add(concepto);
@@ -322,7 +331,10 @@ namespace Facturacion.API.Services.Implementation
                                 CuentaId = cuentaId,
                                 CfdiConceptoId = concepto.Id,
 
-                                TipoImpuesto = tax.Name,     // "IVA"
+                                TipoImpuesto = tax.Name,
+                                ImpuestoClave = MapImpuestoClave(tax.Name), // ✅ si existe en tabla
+                                TipoFactor = "Tasa",                        // ✅ si existe en tabla (o tax.TypeFactor)
+
                                 Tasa = tax.Rate,
                                 Base = tax.Base,
                                 Importe = tax.Total,
@@ -379,6 +391,17 @@ namespace Facturacion.API.Services.Implementation
             }
         }
 
+        static string? MapImpuestoClave(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return null;
+            return name.Trim().ToUpperInvariant() switch
+            {
+                "IVA" => "002",
+                "ISR" => "001",
+                "IEPS" => "003",
+                _ => null
+            };
+        }
         public async Task<PagedResult<FacturaListItemDto>> GetFacturasAsync(
        Guid cuentaId,
        GetFacturasQuery q,
@@ -735,6 +758,80 @@ namespace Facturacion.API.Services.Implementation
   <p><b>Total:</b> {cfdi.Total:N2} {E(cfdi.Moneda)}</p>
   <p><b>Estatus:</b> {E(cfdi.Estatus)}</p>
 </div>";
+        }
+
+
+        public async Task<CfdiDetalleDto> GetCfdiDetalleAsync(Guid cfdiId, Guid cuentaId, CancellationToken ct)
+        {
+            var cfdi = await _context.Cfdis
+                .AsNoTracking()
+                .Include(x => x.CfdiConceptos)
+                .Include(x => x.CfdiEstatusHistorials)
+                .FirstOrDefaultAsync(x => x.Id == cfdiId && x.CuentaId == cuentaId, ct);
+
+            if (cfdi is null)
+                throw new KeyNotFoundException("CFDI no encontrado.");
+
+            var dto = new CfdiDetalleDto
+            {
+                Id = cfdi.Id,
+                FacturamaId = cfdi.FacturamaId,
+                Uuid = cfdi.Uuid,
+
+                Serie = cfdi.Serie,
+                Folio = cfdi.Folio,
+
+                TipoCfdi = cfdi.TipoCfdi,
+                Moneda = cfdi.Moneda,
+                FechaTimbrado = cfdi.FechaTimbrado,
+
+                Subtotal = cfdi.Subtotal,
+                Descuento = cfdi.Descuento,
+                Total = cfdi.Total,
+
+                FormaPago = cfdi.FormaPago,
+                MetodoPago = cfdi.MetodoPago,
+                LugarExpedicion = cfdi.LugarExpedicion,
+
+                RfcEmisor = cfdi.RfcEmisor,
+                RazonSocialEmisor = cfdi.RazonSocialEmisor,
+
+                RfcReceptor = cfdi.RfcReceptor,
+                RazonSocialReceptor = cfdi.RazonSocialReceptor,
+
+                Estatus = cfdi.Estatus,
+                MotivoCancelacion = cfdi.MotivoCancelacion,
+                UuidSustitucion = cfdi.UuidSustitucion,
+
+                Conceptos = cfdi.CfdiConceptos
+                    .OrderBy(x => x.Id)
+                    .Select(x => new CfdiConceptoDto
+                    {
+                        Id = x.Id,
+                        ProductCode = x.ClaveProdServ,   // ajusta nombres reales de tu entidad
+                        UnitCode = x.ClaveUnidad,
+                        Cantidad = x.Cantidad,
+                        Unidad = x.Unidad,
+                        Descripcion = x.Descripcion,
+                        ValorUnitario = x.ValorUnitario,
+                        Descuento = x.Descuento,
+                        Importe = x.Total,
+                    })
+                    .ToList(),
+
+                Historial = cfdi.CfdiEstatusHistorials
+                    .OrderByDescending(h => h.CreatedAt)
+                    .Select(h => new CfdiHistorialDto
+                    {
+                        Id = h.Id,
+                        Estatus = h.Estatus,
+                        Motivo = h.Motivo,
+                        CreatedAt = h.CreatedAt
+                    })
+                    .ToList()
+            };
+
+            return dto;
         }
     }
 }

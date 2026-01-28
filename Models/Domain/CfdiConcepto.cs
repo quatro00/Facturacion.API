@@ -27,6 +27,14 @@ public partial class CfdiConcepto
 
     public Guid CuentaId { get; set; }
 
+    public string? ClaveUnidad { get; set; }
+
+    public string? Unidad { get; set; }
+
+    public string? NoIdentificacion { get; set; }
+
+    public decimal Descuento { get; set; }
+
     public virtual Cfdi Cfdi { get; set; } = null!;
 
     public virtual ICollection<CfdiConceptoImpuesto> CfdiConceptoImpuestos { get; set; } = new List<CfdiConceptoImpuesto>();

@@ -475,14 +475,21 @@ public partial class FacturacionContext : DbContext
                 .HasMaxLength(8)
                 .IsUnicode(false)
                 .IsFixedLength();
+            entity.Property(e => e.ClaveUnidad)
+                .HasMaxLength(3)
+                .IsUnicode(false)
+                .IsFixedLength();
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
             entity.Property(e => e.Descripcion).HasMaxLength(500);
+            entity.Property(e => e.Descuento).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.NoIdentificacion).HasMaxLength(100);
             entity.Property(e => e.ObjetoImp)
                 .HasMaxLength(2)
                 .IsUnicode(false)
                 .IsFixedLength();
             entity.Property(e => e.Subtotal).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.Total).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.Unidad).HasMaxLength(50);
             entity.Property(e => e.ValorUnitario).HasColumnType("decimal(18, 6)");
 
             entity.HasOne(d => d.Cfdi).WithMany(p => p.CfdiConceptos)
@@ -503,7 +510,15 @@ public partial class FacturacionContext : DbContext
             entity.Property(e => e.Base).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
             entity.Property(e => e.Importe).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ImpuestoClave)
+                .HasMaxLength(3)
+                .IsUnicode(false)
+                .IsFixedLength();
             entity.Property(e => e.Tasa).HasColumnType("decimal(10, 6)");
+            entity.Property(e => e.TipoFactor)
+                .HasMaxLength(6)
+                .IsUnicode(false)
+                .IsFixedLength();
             entity.Property(e => e.TipoImpuesto).HasMaxLength(10);
 
             entity.HasOne(d => d.CfdiConcepto).WithMany(p => p.CfdiConceptoImpuestos)
