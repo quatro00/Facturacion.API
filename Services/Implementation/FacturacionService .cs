@@ -6,6 +6,7 @@ using Facturacion.API.Models.Dto.Constants;
 using Facturacion.API.Services.Interface;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.Text;
 using System.Text.Json;
 
 namespace Facturacion.API.Services.Implementation
@@ -147,6 +148,40 @@ namespace Facturacion.API.Services.Implementation
             return doc;
         }
 
+        private static int MapFacturamaStatusToCfdiStatusId(string? facturamaStatus)
+        {
+            var s = (facturamaStatus ?? "").Trim().ToLowerInvariant();
+
+            return s switch
+            {
+                "active" or "valid" or "issued" => CfdiStatusIds.TIMBRADO,
+                "canceled" or "cancelled" => CfdiStatusIds.CANCELADO,
+                "requested" => CfdiStatusIds.CANCELACION_SOLICITADA,
+                "rejected" => CfdiStatusIds.CANCELACION_RECHAZADA,
+                _ => CfdiStatusIds.ERROR_TIMBRADO
+            };
+        }
+
+        private static string? GetStringByPath(JsonElement root, params string[] path)
+        {
+            JsonElement current = root;
+
+            foreach (var key in path)
+            {
+                if (current.ValueKind != JsonValueKind.Object)
+                    return null;
+
+                if (!current.TryGetProperty(key, out var next))
+                    return null;
+
+                current = next;
+            }
+
+            return current.ValueKind == JsonValueKind.String
+                ? current.GetString()
+                : current.GetRawText();
+        }
+
         private async Task GuardarCfdiAsync(
     Guid cuentaId,
     EmitirCfdiRequest req,
@@ -184,11 +219,27 @@ namespace Facturacion.API.Services.Implementation
 
             // RFCs
             var rfcEmisor = root.GetProperty("Issuer").GetProperty("Rfc").GetString() ?? "";
+            var razonSocialEmisor =
+    GetStringByPath(root, "Issuer", "TaxName")
+    ?? GetStringByPath(root, "Issuer", "Name");
+
+
             var rfcReceptor = root.GetProperty("Receiver").GetProperty("Rfc").GetString() ?? "";
+            var razonSocialReceptor =
+    GetStringByPath(root, "Receiver", "Name")
+    ?? GetStringByPath(root, "Receiver", "TaxName");
 
             // Status
+            var facturamaStatus = GetString(root, "Status");
+            var cfdiStatusId = MapFacturamaStatusToCfdiStatusId(facturamaStatus);
+            
+
             var status = GetString(root, "Status");
-            var estatus = string.Equals(status, "active", StringComparison.OrdinalIgnoreCase) ? "Activo" : status;
+            //var estatus = string.Equals(status, "active", StringComparison.OrdinalIgnoreCase) ? "Activo" : status;
+            var estatusClave = await _context.CfdiStatuses
+            .Where(x => x.Id == cfdiStatusId)
+            .Select(x => x.Clave)
+            .FirstAsync(ct);
 
             var facturamaId = root.GetProperty("Id").GetString();
 
@@ -201,6 +252,7 @@ namespace Facturacion.API.Services.Implementation
                     Id = Guid.NewGuid(),
                     CuentaId = cuentaId,
                     ClienteId = req.ClienteId,
+                    FacturamaId = facturamaId ?? "",
 
                     Uuid = uuid,
                     Serie = string.IsNullOrWhiteSpace(serie) ? req.Serie : serie,
@@ -219,10 +271,14 @@ namespace Facturacion.API.Services.Implementation
                     LugarExpedicion = req.ExpeditionPlace,
 
                     RfcEmisor = rfcEmisor,
+                    RazonSocialEmisor = razonSocialEmisor,
+
                     RfcReceptor = rfcReceptor,
+                    RazonSocialReceptor = razonSocialReceptor,
 
                     Pac = "Facturama",
-                    Estatus = estatus,
+                    Estatus = estatusClave,
+                    CfdiStatusId = cfdiStatusId,
 
                     CreatedAt = DateTime.UtcNow
                 };
@@ -303,7 +359,7 @@ namespace Facturacion.API.Services.Implementation
                     Id = Guid.NewGuid(),
                     CuentaId = cuentaId,
                     CfdiId = cfdi.Id,
-                    Estatus = estatus,
+                    Estatus = estatusClave,
                     Motivo = null,
                     CreatedAt = DateTime.UtcNow
                 };
@@ -377,7 +433,7 @@ namespace Facturacion.API.Services.Implementation
                     Folio = x.Folio,
 
                     ReceptorRfc = x.RfcReceptor,
-                    ReceptorNombre = "Juan perez",//x.RazonSocialReceptor, // si no lo tienes, agrégalo
+                    ReceptorNombre = x.RazonSocialReceptor ?? "", // si no lo tienes, agrégalo
 
                     Tipo = x.TipoCfdi,
                     Moneda = x.Moneda,
@@ -535,6 +591,49 @@ namespace Facturacion.API.Services.Implementation
                 "rejected" => "CancelacionRechazada",
                 _ => "CancelacionSolicitada"
             };
+        }
+
+        public async Task<(byte[] bytes, string filename, string contentType)> GetAcuseCancelacionAsync(
+    Guid cfdiId,
+    Guid cuentaId,
+    CancellationToken ct)
+        {
+            var cfdi = await _context.Cfdis
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == cfdiId && x.CuentaId == cuentaId, ct);
+
+            if (cfdi is null)
+                throw new KeyNotFoundException("CFDI no encontrado para la cuenta.");
+
+            // Recomendado: solo permitir si ya está cancelado (ajusta según tu convención)
+            // Si ya migraste a catálogo:
+            // if (cfdi.CfdiStatusId != CfdiStatusIds.CANCELADO) throw new InvalidOperationException("El CFDI no está cancelado.");
+
+            // Si sigues usando el string:
+            if (!string.Equals(cfdi.Estatus, "Cancelado", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(cfdi.Estatus, "CANCELADO", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("El CFDI no está cancelado, no hay acuse final.");
+            }
+
+            if (string.IsNullOrWhiteSpace(cfdi.AcuseCancelacionXml))
+                throw new InvalidOperationException("No hay acuse de cancelación almacenado para este CFDI.");
+
+            byte[] bytes;
+            try
+            {
+                bytes = Convert.FromBase64String(cfdi.AcuseCancelacionXml);
+            }
+            catch (FormatException)
+            {
+                // En caso de que algún día guardes el XML “raw” y no base64
+                bytes = Encoding.UTF8.GetBytes(cfdi.AcuseCancelacionXml);
+            }
+
+            var filename = $"ACUSE_CANCELACION_{cfdi.Uuid:D}.xml";
+            const string contentType = "application/xml";
+
+            return (bytes, filename, contentType);
         }
     }
 }

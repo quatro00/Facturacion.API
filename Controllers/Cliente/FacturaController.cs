@@ -70,5 +70,16 @@ namespace Facturacion.API.Controllers.Cliente
             var result = await _facturacionService.CancelarCfdiAsync(id, cuentaId, req, ct);
             return Ok(result);
         }
+        [HttpGet("{id:guid}/acuse")]
+        public async Task<IActionResult> DescargarAcuse(Guid id, CancellationToken ct)
+        {
+            var cuentaId = Guid.Parse(User.GetCuentaId());
+
+            var (bytes, filename, contentType) =
+                await _facturacionService.GetAcuseCancelacionAsync(id, cuentaId, ct);
+
+            //Response.Headers["Content-Disposition"] = $"attachment; filename=\"{filename}\"";
+            return File(bytes, contentType, filename);
+        }
     }
 }

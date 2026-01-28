@@ -402,7 +402,7 @@ public partial class FacturacionContext : DbContext
             entity.Property(e => e.CfdiStatusId).HasDefaultValueSql("((2))");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
             entity.Property(e => e.Descuento).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.Estatus).HasMaxLength(20);
+            entity.Property(e => e.Estatus).HasMaxLength(30);
             entity.Property(e => e.EstatusCancelacionSat).HasMaxLength(30);
             entity.Property(e => e.FacturamaId).HasMaxLength(50);
             entity.Property(e => e.Folio).HasMaxLength(20);
@@ -522,7 +522,7 @@ public partial class FacturacionContext : DbContext
 
             entity.Property(e => e.Id).HasDefaultValueSql("(newid())");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
-            entity.Property(e => e.Estatus).HasMaxLength(20);
+            entity.Property(e => e.Estatus).HasMaxLength(30);
             entity.Property(e => e.Motivo).HasMaxLength(250);
 
             entity.HasOne(d => d.Cfdi).WithMany(p => p.CfdiEstatusHistorials)
