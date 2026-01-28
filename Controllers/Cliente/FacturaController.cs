@@ -1,4 +1,5 @@
 ﻿using Facturacion.API.Helpers;
+using Facturacion.API.Models.Dto;
 using Facturacion.API.Models.Dto.Cliente.Factura;
 using Facturacion.API.Services.Interface;
 using Microsoft.AspNetCore.Http;
@@ -22,6 +23,16 @@ namespace Facturacion.API.Controllers.Cliente
             var cuentaId = Guid.Parse(User.GetCuentaId());
             var result = await _facturacionService.EmitirCfdiMultiAsync(req,Guid.Parse(User.GetCuentaId()), ct);
             return Ok(result.RootElement); // o mapear a tu propio DTO
+        }
+
+        [HttpGet("GetFacturas")]
+        public async Task<ActionResult<PagedResult<FacturaListItemDto>>> GetFacturas(
+        [FromQuery] GetFacturasQuery query,
+        CancellationToken ct)
+        {
+            var cuentaId = Guid.Parse(User.GetCuentaId());
+            var result = await _facturacionService.GetFacturasAsync(cuentaId, query, ct);
+            return Ok(result);
         }
     }
 }

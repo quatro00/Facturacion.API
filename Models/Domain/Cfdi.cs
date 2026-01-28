@@ -45,6 +45,8 @@ public partial class Cfdi
 
     public DateTime CreatedAt { get; set; }
 
+    public string? FacturamaId { get; set; }
+
     public virtual ICollection<CfdiConcepto> CfdiConceptos { get; set; } = new List<CfdiConcepto>();
 
     public virtual ICollection<CfdiEstatusHistorial> CfdiEstatusHistorials { get; set; } = new List<CfdiEstatusHistorial>();

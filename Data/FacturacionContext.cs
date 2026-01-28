@@ -396,6 +396,7 @@ public partial class FacturacionContext : DbContext
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
             entity.Property(e => e.Descuento).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.Estatus).HasMaxLength(20);
+            entity.Property(e => e.FacturamaId).HasMaxLength(50);
             entity.Property(e => e.Folio).HasMaxLength(20);
             entity.Property(e => e.FormaPago)
                 .HasMaxLength(2)

@@ -1,4 +1,5 @@
-﻿using Facturacion.API.Models.Dto.Cliente.Factura;
+﻿using Facturacion.API.Models.Dto;
+using Facturacion.API.Models.Dto.Cliente.Factura;
 using System.Text.Json;
 
 namespace Facturacion.API.Services.Interface
@@ -6,5 +7,6 @@ namespace Facturacion.API.Services.Interface
     public interface IFacturacionService
     {
         Task<JsonDocument> EmitirCfdiMultiAsync(EmitirCfdiRequest req, Guid cuentaId, CancellationToken ct = default);
+        Task<PagedResult<FacturaListItemDto>> GetFacturasAsync(Guid cuentaId, GetFacturasQuery query, CancellationToken ct);
     }
 }

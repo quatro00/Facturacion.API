@@ -1,5 +1,6 @@
 ﻿using Facturacion.API.Data;
 using Facturacion.API.Models.Domain;
+using Facturacion.API.Models.Dto;
 using Facturacion.API.Models.Dto.Cliente.Factura;
 using Facturacion.API.Services.Interface;
 using Microsoft.EntityFrameworkCore;
@@ -188,6 +189,8 @@ namespace Facturacion.API.Services.Implementation
             var status = GetString(root, "Status");
             var estatus = string.Equals(status, "active", StringComparison.OrdinalIgnoreCase) ? "Activo" : status;
 
+            var facturamaId = root.GetProperty("Id").GetString();
+
             await using var tx = await _context.Database.BeginTransactionAsync(ct);
             try
             {
@@ -314,6 +317,80 @@ namespace Facturacion.API.Services.Implementation
                 await tx.RollbackAsync(ct);
                 throw;
             }
+        }
+
+        public async Task<PagedResult<FacturaListItemDto>> GetFacturasAsync(
+       Guid cuentaId,
+       GetFacturasQuery q,
+       CancellationToken ct)
+        {
+            var query = _context.Cfdis
+                .AsNoTracking()
+                .Where(x => x.CuentaId == cuentaId);
+
+            // 📅 Fechas
+            if (q.From.HasValue)
+                query = query.Where(x => x.FechaTimbrado >= q.From.Value.Date);
+
+            if (q.To.HasValue)
+                query = query.Where(x => x.FechaTimbrado <= q.To.Value.Date.AddDays(1).AddTicks(-1));
+
+            // 🟢 Estatus
+            if (!string.IsNullOrWhiteSpace(q.Status))
+                query = query.Where(x => x.Estatus == q.Status);
+
+            // 🧾 Tipo
+            if (!string.IsNullOrWhiteSpace(q.Type))
+                query = query.Where(x => x.TipoCfdi == q.Type);
+
+            // 💱 Moneda
+            if (!string.IsNullOrWhiteSpace(q.Currency))
+                query = query.Where(x => x.Moneda == q.Currency);
+
+            // 🔍 Búsqueda libre
+            if (!string.IsNullOrWhiteSpace(q.Search))
+            {
+                var s = q.Search.Trim();
+
+                query = query.Where(x =>
+                    x.Uuid.ToString().Contains(s) ||
+                    x.RfcReceptor.Contains(s) ||
+                    (x.Serie + "-" + x.Folio).Contains(s)
+                );
+            }
+
+            var total = await query.CountAsync(ct);
+
+            var items = await query
+                .OrderByDescending(x => x.FechaTimbrado)
+                .Skip((q.Page - 1) * q.PageSize)
+                .Take(q.PageSize)
+                .Select(x => new FacturaListItemDto
+                {
+                    Id = x.Id,
+                    FacturamaId = x.FacturamaId,
+                    Uuid = x.Uuid.ToString(),
+
+                    Fecha = x.FechaTimbrado,
+                    Serie = x.Serie,
+                    Folio = x.Folio,
+
+                    ReceptorRfc = x.RfcReceptor,
+                    ReceptorNombre = "Juan perez",//x.RazonSocialReceptor, // si no lo tienes, agrégalo
+
+                    Tipo = x.TipoCfdi,
+                    Moneda = x.Moneda,
+
+                    Total = x.Total,
+                    Estatus = x.Estatus
+                })
+                .ToListAsync(ct);
+
+            return new PagedResult<FacturaListItemDto>
+            {
+                Items = items,
+                Total = total
+            };
         }
     }
 }
