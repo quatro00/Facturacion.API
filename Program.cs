@@ -39,7 +39,8 @@ builder.Services.AddScoped<IPerfilService, PerfilService>();
 builder.Services.AddScoped<IClienteService, ClienteService>();
 builder.Services.AddScoped<ICatalogoService, CatalogoService>();
 builder.Services.AddScoped<IFacturacionService, FacturacionService>();
-//builder.Services.AddScoped<IReporteConceptoRepository, ReporteConceptoRepository>();
+builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 
 builder.Services.AddAutoMapper(typeof(MappingProfile));
 builder.Services.AddIdentityCore<IdentityUser>()

@@ -81,5 +81,13 @@ namespace Facturacion.API.Controllers.Cliente
             //Response.Headers["Content-Disposition"] = $"attachment; filename=\"{filename}\"";
             return File(bytes, contentType, filename);
         }
+
+        [HttpPost("{id:guid}/reenviar")]
+        public async Task<IActionResult> Reenviar(Guid id, [FromBody] ReenviarCfdiRequestDto req, CancellationToken ct)
+        {
+            var cuentaId = Guid.Parse(User.GetCuentaId());
+            var result = await _facturacionService.ReenviarCfdiAsync(id, cuentaId, req, ct);
+            return Ok(result);
+        }
     }
 }

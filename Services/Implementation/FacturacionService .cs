@@ -6,6 +6,7 @@ using Facturacion.API.Models.Dto.Constants;
 using Facturacion.API.Services.Interface;
 using Microsoft.EntityFrameworkCore;
 using System;
+using System.Net.Mail;
 using System.Text;
 using System.Text.Json;
 
@@ -15,11 +16,13 @@ namespace Facturacion.API.Services.Implementation
     {
         private readonly FacturacionContext _context;
         private readonly IFacturamaClient _facturama;
+        private readonly IEmailSender _emailSender;
 
-        public FacturacionService(FacturacionContext context, IFacturamaClient facturama)
+        public FacturacionService(FacturacionContext context, IFacturamaClient facturama, IEmailSender emailSender)
         {
             _context = context;
             _facturama = facturama;
+            _emailSender = emailSender;
         }
         //----helpers----
         private static decimal R2(decimal v) =>
@@ -634,6 +637,104 @@ namespace Facturacion.API.Services.Implementation
             const string contentType = "application/xml";
 
             return (bytes, filename, contentType);
+        }
+
+        public async Task<ReenviarCfdiResponseDto> ReenviarCfdiAsync(
+    Guid cfdiId,
+    Guid cuentaId,
+    ReenviarCfdiRequestDto req,
+    CancellationToken ct = default)
+        {
+            if (req is null) throw new ArgumentNullException(nameof(req));
+
+            var cfdi = await _context.Cfdis
+                .Include(x => x.Cliente)
+                .FirstOrDefaultAsync(x => x.Id == cfdiId && x.CuentaId == cuentaId, ct);
+
+            if (cfdi is null)
+                throw new KeyNotFoundException("CFDI no encontrado para la cuenta.");
+
+            // 1) Resolver destinatario
+            var to = (req.EmailTo ?? "").Trim();
+
+            // Ajusta esto al nombre real de tu campo en Cliente
+            // Ej: Cliente.Correo, Cliente.Email, Cliente.EmailFacturacion...
+            if (string.IsNullOrWhiteSpace(to))
+                to = (cfdi.Cliente?.Email ?? "").Trim(); // <-- CAMBIA "Correo" si tu entidad usa otro nombre
+
+            if (string.IsNullOrWhiteSpace(to))
+                throw new InvalidOperationException("No hay correo destino. Proporciona EmailTo o registra correo en el cliente.");
+
+            _ = new MailAddress(to); // valida formato
+
+            // 2) Adjuntos
+            var attachments = new List<(byte[] bytes, string filename, string contentType)>();
+            const string facturamaType = "issuedLite";
+
+            if (req.IncludeXml)
+                attachments.Add(await GetXmlAsync(cfdi.FacturamaId, facturamaType, ct));
+
+            if (req.IncludePdf)
+                attachments.Add(await GetPdfAsync(cfdi.FacturamaId, facturamaType, ct));
+
+            if (req.IncludeAcuseCancelacion &&
+                string.Equals(cfdi.Estatus, "CANCELADO", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(cfdi.AcuseCancelacionXml))
+            {
+                attachments.Add(await GetAcuseCancelacionAsync(cfdi.Id, cuentaId, ct));
+            }
+
+            if (attachments.Count == 0)
+                throw new InvalidOperationException("No hay adjuntos seleccionados para enviar.");
+
+            // 3) Asunto + body
+            var subject = !string.IsNullOrWhiteSpace(req.Subject)
+                ? req.Subject!.Trim()
+                : $"CFDI {cfdi.Serie}{cfdi.Folio} - {cfdi.Uuid:D}";
+
+            var html = BuildReenvioHtml(cfdi, req.Message);
+
+            // 4) Enviar
+            var providerId = await _emailSender.SendAsync(to, subject, html, attachments, ct);
+
+            // 5) Registrar bitácora (tu tabla de historial ya existe)
+            _context.CfdiEstatusHistorials.Add(new CfdiEstatusHistorial
+            {
+                CfdiId = cfdi.Id,
+                CuentaId = cuentaId,
+                Estatus = cfdi.Estatus, // no cambia, pero queda auditado
+                Motivo = $"Reenvío por correo a {to}"
+            });
+
+            await _context.SaveChangesAsync(ct);
+
+            return new ReenviarCfdiResponseDto
+            {
+                Sent = true,
+                To = to,
+                ProviderMessageId = providerId
+            };
+        }
+
+        private static string BuildReenvioHtml(Cfdi cfdi, string? customMessage)
+        {
+            var msg = string.IsNullOrWhiteSpace(customMessage)
+                ? "Adjuntamos su CFDI en formato PDF y XML."
+                : customMessage;
+
+            static string E(string s) => System.Net.WebUtility.HtmlEncode(s);
+
+            return $@"
+<div style=""font-family: Arial, sans-serif; font-size: 14px;"">
+  <p>{E(msg)}</p>
+  <hr/>
+  <p><b>UUID:</b> {cfdi.Uuid:D}</p>
+  <p><b>Serie/Folio:</b> {E((cfdi.Serie ?? ""))}{E((cfdi.Folio ?? ""))}</p>
+  <p><b>Emisor:</b> {E(cfdi.RazonSocialEmisor ?? cfdi.RfcEmisor)}</p>
+  <p><b>Receptor:</b> {E(cfdi.RazonSocialReceptor ?? cfdi.RfcReceptor)}</p>
+  <p><b>Total:</b> {cfdi.Total:N2} {E(cfdi.Moneda)}</p>
+  <p><b>Estatus:</b> {E(cfdi.Estatus)}</p>
+</div>";
         }
     }
 }
