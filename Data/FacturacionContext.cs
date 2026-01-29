@@ -608,23 +608,37 @@ public partial class FacturacionContext : DbContext
         {
             entity.ToTable("Cliente");
 
+            entity.HasIndex(e => new { e.CuentaId, e.RazonSocial }, "IX_Cliente_Cuenta_RazonSocial");
+
+            entity.HasIndex(e => new { e.CuentaId, e.Rfc }, "UX_Cliente_Cuenta_Rfc").IsUnique();
+
             entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.Calle).HasMaxLength(150);
             entity.Property(e => e.CodigoPostal).HasMaxLength(50);
             entity.Property(e => e.Colonia).HasMaxLength(50);
+            entity.Property(e => e.CorreosCc).HasMaxLength(500);
             entity.Property(e => e.Email).HasMaxLength(50);
             entity.Property(e => e.Estado).HasMaxLength(50);
             entity.Property(e => e.FechaCreacion).HasColumnType("datetime");
             entity.Property(e => e.FechaModificacion).HasColumnType("datetime");
+            entity.Property(e => e.Localidad).HasMaxLength(80);
             entity.Property(e => e.Municipio).HasMaxLength(50);
+            entity.Property(e => e.NombreComercial).HasMaxLength(150);
+            entity.Property(e => e.Notas).HasMaxLength(500);
             entity.Property(e => e.NumeroExterior).HasMaxLength(50);
             entity.Property(e => e.NumeroInterior).HasMaxLength(50);
             entity.Property(e => e.Pais)
                 .HasMaxLength(50)
                 .HasDefaultValueSql("(N'México')");
             entity.Property(e => e.RazonSocial).HasMaxLength(250);
+            entity.Property(e => e.Referencia).HasMaxLength(150);
             entity.Property(e => e.Rfc).HasMaxLength(50);
             entity.Property(e => e.Telefono).HasMaxLength(50);
+            entity.Property(e => e.TipoPersona)
+                .HasMaxLength(1)
+                .IsUnicode(false)
+                .HasDefaultValueSql("('M')")
+                .IsFixedLength();
             entity.Property(e => e.UsuarioCreacionId).HasMaxLength(50);
             entity.Property(e => e.UsuarioModificacion).HasMaxLength(50);
 
@@ -763,26 +777,41 @@ public partial class FacturacionContext : DbContext
         {
             entity.ToTable("RazonSocial");
 
+            entity.HasIndex(e => e.CuentaId, "UX_RazonSocial_Cuenta_Default")
+                .IsUnique()
+                .HasFilter("([EsDefault]=(1))");
+
+            entity.HasIndex(e => new { e.CuentaId, e.Rfc }, "UX_RazonSocial_Cuenta_Rfc").IsUnique();
+
             entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.Calle).HasMaxLength(50);
             entity.Property(e => e.CelularNotificaciones).HasMaxLength(50);
             entity.Property(e => e.CodigoPostal).HasMaxLength(50);
             entity.Property(e => e.Colonia).HasMaxLength(50);
+            entity.Property(e => e.CpLugarExpedicionDefault).HasMaxLength(5);
+            entity.Property(e => e.EmailEmisor).HasMaxLength(254);
             entity.Property(e => e.Estado).HasMaxLength(50);
+            entity.Property(e => e.FacturamaIssuerId).HasMaxLength(80);
             entity.Property(e => e.FechaCreacion).HasColumnType("datetime");
-            entity.Property(e => e.FechaModificacion).HasMaxLength(50);
+            entity.Property(e => e.FechaModificacion).HasColumnType("datetime");
             entity.Property(e => e.Municipio).HasMaxLength(50);
             entity.Property(e => e.NoExterior).HasMaxLength(50);
             entity.Property(e => e.NoInterior).HasMaxLength(50);
+            entity.Property(e => e.NombreComercial).HasMaxLength(200);
             entity.Property(e => e.RazonSocial1)
                 .HasMaxLength(250)
                 .HasColumnName("RazonSocial");
             entity.Property(e => e.Rfc).HasMaxLength(50);
+            entity.Property(e => e.SerieEgresoDefault).HasMaxLength(10);
+            entity.Property(e => e.SerieIngresoDefault)
+                .HasMaxLength(10)
+                .HasDefaultValueSql("('A')");
+            entity.Property(e => e.TelefonoEmisor).HasMaxLength(20);
             entity.Property(e => e.UsuarioCreacionId).HasMaxLength(50);
             entity.Property(e => e.UsuarioModificacionId).HasMaxLength(50);
 
-            entity.HasOne(d => d.Cuenta).WithMany(p => p.RazonSocials)
-                .HasForeignKey(d => d.CuentaId)
+            entity.HasOne(d => d.Cuenta).WithOne(p => p.RazonSocial)
+                .HasForeignKey<RazonSocial>(d => d.CuentaId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_RazonSocial_Cuenta");
 

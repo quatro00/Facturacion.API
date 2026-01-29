@@ -17,7 +17,7 @@ public partial class Cuentum
 
     public virtual ICollection<Cliente> Clientes { get; set; } = new List<Cliente>();
 
-    public virtual ICollection<RazonSocial> RazonSocials { get; set; } = new List<RazonSocial>();
+    public virtual RazonSocial? RazonSocial { get; set; }
 
     public virtual AspNetUser User { get; set; } = null!;
 }

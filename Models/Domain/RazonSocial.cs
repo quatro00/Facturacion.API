@@ -45,9 +45,27 @@ public partial class RazonSocial
 
     public byte[]? KeyPassword { get; set; }
 
-    public string? FechaModificacion { get; set; }
+    public DateTime? FechaModificacion { get; set; }
 
     public string? UsuarioModificacionId { get; set; }
+
+    public string? NombreComercial { get; set; }
+
+    public string? EmailEmisor { get; set; }
+
+    public string? TelefonoEmisor { get; set; }
+
+    public string SerieIngresoDefault { get; set; } = null!;
+
+    public string? SerieEgresoDefault { get; set; }
+
+    public string? CpLugarExpedicionDefault { get; set; }
+
+    public bool EsDefault { get; set; }
+
+    public string? FacturamaIssuerId { get; set; }
+
+    public bool TieneSellos { get; set; }
 
     public virtual Cuentum Cuenta { get; set; } = null!;
 

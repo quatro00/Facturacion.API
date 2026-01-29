@@ -6,6 +6,31 @@ namespace Facturacion.API.Helpers
 {
     public class Helpers
     {
+        static string NormalizeRfc(string rfc)
+        {
+            return (rfc ?? "").Trim().ToUpperInvariant().Replace(" ", "");
+        }
+
+        static bool IsValidCp(string cp)
+        {
+            return !string.IsNullOrWhiteSpace(cp)
+                   && cp.Length == 5
+                   && cp.All(char.IsDigit);
+        }
+
+        static bool IsValidEmail(string email)
+        {
+            try { _ = new System.Net.Mail.MailAddress(email); return true; }
+            catch { return false; }
+        }
+
+        static bool IsValidCcEmails(string? cc)
+        {
+            if (string.IsNullOrWhiteSpace(cc)) return true;
+
+            var parts = cc.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            return parts.All(IsValidEmail);
+        }
         /*
         public DataTable ConvertCsvToDataTable(IFormFile file)
         {
