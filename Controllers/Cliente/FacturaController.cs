@@ -105,5 +105,13 @@ namespace Facturacion.API.Controllers.Cliente
             var dto = await _facturacionService.GetCfdiDetalleAsync(id, cuentaId, ct);
             return Ok(dto);
         }
+
+        [Authorize(Roles = "Cliente")]
+        [HttpPost("{cfdiId:guid}/notas-credito/total")]
+        public async Task<IActionResult> CrearNotaCreditoTotal(Guid cfdiId, CancellationToken ct)
+        {
+            var dto = await _facturacionService.CrearNotaCreditoTotalAsync(cfdiId, ct);
+            return Ok(dto);
+        }
     }
 }

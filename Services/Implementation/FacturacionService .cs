@@ -39,7 +39,7 @@ namespace Facturacion.API.Services.Implementation
             return 0m;
         }
 
-        public async Task<JsonDocument> EmitirCfdiMultiAsync(EmitirCfdiRequest req,Guid cuentaId, CancellationToken ct = default)
+        public async Task<JsonDocument> EmitirCfdiMultiAsync(EmitirCfdiRequest req, Guid cuentaId, CancellationToken ct = default)
         {
             // 1) Cliente
             var cliente = await _context.Clientes
@@ -185,14 +185,17 @@ namespace Facturacion.API.Services.Implementation
                 : current.GetRawText();
         }
 
-        private async Task GuardarCfdiAsync(
+        private async Task<Guid> GuardarCfdiAsync(
     Guid cuentaId,
     EmitirCfdiRequest req,
     FacturamaCfdiRequest payload,
     string requestJson,
     string responseJson,
     JsonDocument facturamaDoc,
-    CancellationToken ct)
+    CancellationToken ct,
+    Guid? cfdiOrigenId = null,
+    string? tipoRelacionSat = null
+)
         {
             var root = facturamaDoc.RootElement;
 
@@ -235,7 +238,22 @@ namespace Facturacion.API.Services.Implementation
             // Status
             var facturamaStatus = GetString(root, "Status");
             var cfdiStatusId = MapFacturamaStatusToCfdiStatusId(facturamaStatus);
-            
+
+
+            string? emisorRegimen = payload.Issuer?.FiscalRegime
+    ?? GetStringByPath(root, "Issuer", "FiscalRegime");
+
+            string? receptorRegimen = payload.Receiver?.FiscalRegime
+                ?? GetStringByPath(root, "Receiver", "FiscalRegime");
+
+            string? receptorCp = payload.Receiver?.TaxZipCode
+                ?? GetStringByPath(root, "Receiver", "TaxZipCode");
+
+            string? usoCfdi = payload.Receiver?.CfdiUse
+                ?? GetStringByPath(root, "Receiver", "CfdiUse");
+
+            string? exportacion = payload.Exportation
+                ?? GetString(root, "Exportation");
 
             var status = GetString(root, "Status");
             //var estatus = string.Equals(status, "active", StringComparison.OrdinalIgnoreCase) ? "Activo" : status;
@@ -249,6 +267,7 @@ namespace Facturacion.API.Services.Implementation
             await using var tx = await _context.Database.BeginTransactionAsync(ct);
             try
             {
+                // 1) Cfdi (principal)
                 // 1) Cfdi (principal)
                 var cfdi = new Cfdi
                 {
@@ -283,7 +302,16 @@ namespace Facturacion.API.Services.Implementation
                     Estatus = estatusClave,
                     CfdiStatusId = cfdiStatusId,
 
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow,
+
+                    // ✅ NUEVOS CAMPOS (snapshot fiscal desde payload)
+                    EmisorRegimenFiscal = emisorRegimen,       // "605"
+                    ReceptorRegimenFiscal = receptorRegimen,   // "612"
+                    ReceptorTaxZipCode = receptorCp,        // "01160"
+                    UsoCfdi = usoCfdi,                      // "G03"
+                    Exportacion = exportacion,                         // "01"
+                    CfdiOrigenId = cfdiOrigenId,
+                    TipoRelacionSat = tipoRelacionSat,
                 };
 
                 _context.Cfdis.Add(cfdi);
@@ -383,6 +411,7 @@ namespace Facturacion.API.Services.Implementation
 
                 await _context.SaveChangesAsync(ct);
                 await tx.CommitAsync(ct);
+                return cfdi.Id;
             }
             catch
             {
@@ -408,6 +437,7 @@ namespace Facturacion.API.Services.Implementation
        CancellationToken ct)
         {
             var query = _context.Cfdis
+                .Include(x => x.CfdiOrigen)
                 .AsNoTracking()
                 .Where(x => x.CuentaId == cuentaId);
 
@@ -459,13 +489,20 @@ namespace Facturacion.API.Services.Implementation
                     Folio = x.Folio,
 
                     ReceptorRfc = x.RfcReceptor,
-                    ReceptorNombre = x.RazonSocialReceptor ?? "", // si no lo tienes, agrégalo
+                    ReceptorNombre = x.RazonSocialReceptor ?? "",
 
                     Tipo = x.TipoCfdi,
-                    Moneda = x.Moneda,
+                    TipoNombre = x.TipoCfdi == "E" ? "Nota de crédito" : "Factura",
 
+                    Moneda = x.Moneda,
                     Total = x.Total,
-                    Estatus = x.Estatus
+                    Estatus = x.Estatus,
+
+                    // ✅ Relación NC -> Origen
+                    CfdiOrigenId = x.CfdiOrigenId,
+                    OrigenUuid = x.CfdiOrigen != null ? x.CfdiOrigen.Uuid.ToString() : null,
+                    OrigenSerie = x.CfdiOrigen != null ? x.CfdiOrigen.Serie : null,
+                    OrigenFolio = x.CfdiOrigen != null ? x.CfdiOrigen.Folio : null,
                 })
                 .ToListAsync(ct);
 
@@ -832,6 +869,162 @@ namespace Facturacion.API.Services.Implementation
             };
 
             return dto;
+        }
+
+
+        private static void ValidarNcTotal(FacturamaCfdiRequest req)
+        {
+            if (req.CfdiType != "E")
+                throw new InvalidOperationException("NC debe ser CfdiType=E.");
+
+            if (req.NameId != "2")
+                throw new InvalidOperationException("NC requiere NameId='2' (Facturama).");
+
+            if (req.Relations is null || req.Relations.Cfdis.Count == 0 || req.Relations.Cfdis.Any(x => string.IsNullOrWhiteSpace(x.Uuid)))
+                throw new InvalidOperationException("NC requiere Relations con UUID origen.");
+
+            if (req.Items is null || req.Items.Count == 0)
+                throw new InvalidOperationException("NC requiere al menos 1 concepto.");
+
+            if (req.Issuer is null || string.IsNullOrWhiteSpace(req.Issuer.FiscalRegime))
+                throw new InvalidOperationException("Falta FiscalRegime del emisor.");
+
+            if (req.Receiver is null || string.IsNullOrWhiteSpace(req.Receiver.FiscalRegime) || string.IsNullOrWhiteSpace(req.Receiver.TaxZipCode))
+                throw new InvalidOperationException("Faltan FiscalRegime/TaxZipCode del receptor.");
+        }
+
+
+        public async Task<CfdiCreadoDto> CrearNotaCreditoTotalAsync(Guid cfdiId, CancellationToken ct)
+        {
+            var origen = await _context.Cfdis
+                .Include(x => x.CfdiConceptos)
+                    .ThenInclude(c => c.CfdiConceptoImpuestos)
+                .FirstOrDefaultAsync(x => x.Id == cfdiId, ct);
+
+            if (origen is null)
+                throw new InvalidOperationException("CFDI origen no encontrado.");
+
+            if (!string.Equals(origen.TipoCfdi, "I", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Solo se puede generar NC desde CFDI de Ingreso (I).");
+
+            if (!string.Equals(origen.Estatus, "TIMBRADO", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("El CFDI origen debe estar TIMBRADO.");
+
+            // Armar payload NC TOTAL
+            var payload = new FacturamaCfdiRequest
+            {
+                Date = DateTimeOffset.Now.ToString("yyyy-MM-ddTHH:mm:ss"),
+                Serie = origen.Serie,
+                Folio = origen.Folio,
+                CfdiType = "E",
+                NameId = "2",
+
+                Currency = origen.Moneda,
+                ExpeditionPlace = origen.LugarExpedicion,
+                Exportation = string.IsNullOrWhiteSpace(origen.Exportacion) ? "01" : origen.Exportacion,
+
+                PaymentForm = "99",
+                PaymentMethod = "PUE",
+
+                Issuer = new FacturamaIssuer
+                {
+                    Rfc = origen.RfcEmisor,
+                    Name = origen.RazonSocialEmisor ?? "EMISOR",
+                    FiscalRegime = origen.EmisorRegimenFiscal ?? throw new InvalidOperationException("Falta EmisorRegimenFiscal en CFDI origen.")
+                },
+
+                Receiver = new FacturamaReceiver
+                {
+                    Rfc = origen.RfcReceptor,
+                    Name = origen.RazonSocialReceptor ?? "RECEPTOR",
+                    CfdiUse = "G02", // NC
+                    FiscalRegime = origen.ReceptorRegimenFiscal ?? throw new InvalidOperationException("Falta ReceptorRegimenFiscal en CFDI origen."),
+                    TaxZipCode = origen.ReceptorTaxZipCode ?? throw new InvalidOperationException("Falta ReceptorTaxZipCode en CFDI origen.")
+                },
+
+                Relations = new FacturamaRelations
+                {
+                    Type = "01",
+                    Cfdis = new List<FacturamaRelatedCfdi>
+            {
+                new() { Uuid = origen.Uuid.ToString() }
+            }
+                },
+
+                Items = origen.CfdiConceptos.Select(con => new FacturamaItem
+                {
+                    ProductCode = con.ClaveProdServ,
+                    UnitCode = con.ClaveUnidad ?? "H87",
+                    Description = con.Descripcion,
+                    Quantity = con.Cantidad,
+                    UnitPrice = con.ValorUnitario,
+                    Discount = con.Descuento,
+                    Unit = con.Unidad,
+                    IdentificationNumber = con.NoIdentificacion,
+                    Subtotal = con.Subtotal,
+                    TaxObject = con.ObjetoImp,
+                    Taxes = con.CfdiConceptoImpuestos.Select(imp => new FacturamaTax
+                    {
+                        Name = imp.TipoImpuesto,
+                        Rate = imp.Tasa,
+                        Base = imp.Base,
+                        Total = imp.Importe,
+                        IsRetention = imp.EsRetencion
+                    }).ToList(),
+                    Total = con.Total
+                }).ToList()
+            };
+
+            // Llamada Facturama (tu método actual)
+            var requestJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions { PropertyNamingPolicy = null });
+            var (doc, responseJson) = await _facturama.CrearCfdiMultiRawAsync(payload, ct);
+
+            // EmitirCfdiRequest mínimo para reusar GuardarCfdiAsync
+            var req = new EmitirCfdiRequest
+            {
+                ClienteId = origen.ClienteId,
+                Serie = payload.Serie,
+                Folio = payload.Folio,
+                CfdiType = "E",
+                Currency = payload.Currency,
+                PaymentForm = payload.PaymentForm,
+                PaymentMethod = payload.PaymentMethod,
+                ExpeditionPlace = payload.ExpeditionPlace
+            };
+
+            // ✅ Reusar tu guardado (con relación)
+            await GuardarCfdiAsync(
+                cuentaId: origen.CuentaId,
+                req: req,
+                payload: payload,
+                requestJson: requestJson,
+                responseJson: responseJson,
+                facturamaDoc: doc,
+                ct: ct,
+                cfdiOrigenId: origen.Id,
+                tipoRelacionSat: "01"
+            );
+
+            // Si quieres devolver el Id/UUID recién creado, aquí hay 2 opciones:
+            // A) Modificar GuardarCfdiAsync para que regrese el Cfdi.Id creado
+            // B) Buscar por FacturamaId/Uuid parseando doc (rápido)
+            var uuidNc = Guid.Parse(doc.RootElement.GetProperty("Complement").GetProperty("TaxStamp").GetProperty("Uuid").GetString()!);
+
+            var nc = await _context.Cfdis
+                .AsNoTracking()
+                .Where(x => x.Uuid == uuidNc)
+                .Select(x => new CfdiCreadoDto
+                {
+                    Id = x.Id,
+                    Uuid = x.Uuid.ToString(),
+                    FacturamaId = x.FacturamaId,
+                    Serie = x.Serie,
+                    Folio = x.Folio,
+                    Total = x.Total
+                })
+                .FirstAsync(ct);
+
+            return nc;
         }
     }
 }

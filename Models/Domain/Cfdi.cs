@@ -65,9 +65,25 @@ public partial class Cfdi
 
     public int CfdiStatusId { get; set; }
 
+    public string? EmisorRegimenFiscal { get; set; }
+
+    public string? UsoCfdi { get; set; }
+
+    public string? ReceptorRegimenFiscal { get; set; }
+
+    public string? ReceptorTaxZipCode { get; set; }
+
+    public string? Exportacion { get; set; }
+
+    public Guid? CfdiOrigenId { get; set; }
+
+    public string? TipoRelacionSat { get; set; }
+
     public virtual ICollection<CfdiConcepto> CfdiConceptos { get; set; } = new List<CfdiConcepto>();
 
     public virtual ICollection<CfdiEstatusHistorial> CfdiEstatusHistorials { get; set; } = new List<CfdiEstatusHistorial>();
+
+    public virtual Cfdi? CfdiOrigen { get; set; }
 
     public virtual ICollection<CfdiRaw> CfdiRaws { get; set; } = new List<CfdiRaw>();
 
@@ -76,4 +92,6 @@ public partial class Cfdi
     public virtual Cliente Cliente { get; set; } = null!;
 
     public virtual Cuentum Cuenta { get; set; } = null!;
+
+    public virtual ICollection<Cfdi> InverseCfdiOrigen { get; set; } = new List<Cfdi>();
 }

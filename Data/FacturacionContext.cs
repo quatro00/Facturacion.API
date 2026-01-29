@@ -402,8 +402,16 @@ public partial class FacturacionContext : DbContext
             entity.Property(e => e.CfdiStatusId).HasDefaultValueSql("((2))");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
             entity.Property(e => e.Descuento).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.EmisorRegimenFiscal)
+                .HasMaxLength(3)
+                .IsUnicode(false)
+                .IsFixedLength();
             entity.Property(e => e.Estatus).HasMaxLength(30);
             entity.Property(e => e.EstatusCancelacionSat).HasMaxLength(30);
+            entity.Property(e => e.Exportacion)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .IsFixedLength();
             entity.Property(e => e.FacturamaId).HasMaxLength(50);
             entity.Property(e => e.Folio).HasMaxLength(20);
             entity.Property(e => e.FormaPago)
@@ -429,6 +437,14 @@ public partial class FacturacionContext : DbContext
             entity.Property(e => e.Pac).HasMaxLength(50);
             entity.Property(e => e.RazonSocialEmisor).HasMaxLength(150);
             entity.Property(e => e.RazonSocialReceptor).HasMaxLength(150);
+            entity.Property(e => e.ReceptorRegimenFiscal)
+                .HasMaxLength(3)
+                .IsUnicode(false)
+                .IsFixedLength();
+            entity.Property(e => e.ReceptorTaxZipCode)
+                .HasMaxLength(5)
+                .IsUnicode(false)
+                .IsFixedLength();
             entity.Property(e => e.RfcEmisor)
                 .HasMaxLength(13)
                 .IsUnicode(false)
@@ -443,7 +459,19 @@ public partial class FacturacionContext : DbContext
                 .HasMaxLength(1)
                 .IsUnicode(false)
                 .IsFixedLength();
+            entity.Property(e => e.TipoRelacionSat)
+                .HasMaxLength(2)
+                .IsUnicode(false)
+                .IsFixedLength();
             entity.Property(e => e.Total).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.UsoCfdi)
+                .HasMaxLength(3)
+                .IsUnicode(false)
+                .IsFixedLength();
+
+            entity.HasOne(d => d.CfdiOrigen).WithMany(p => p.InverseCfdiOrigen)
+                .HasForeignKey(d => d.CfdiOrigenId)
+                .HasConstraintName("FK_Cfdi_CfdiOrigen");
 
             entity.HasOne(d => d.CfdiStatus).WithMany(p => p.Cfdis)
                 .HasForeignKey(d => d.CfdiStatusId)
