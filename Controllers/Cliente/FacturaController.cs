@@ -115,9 +115,10 @@ namespace Facturacion.API.Controllers.Cliente
 
         [Authorize(Roles = "Cliente")]
         [HttpPost("{cfdiId:guid}/notas-credito/total")]
-        public async Task<IActionResult> CrearNotaCreditoTotal(Guid cfdiId, CancellationToken ct)
+        public async Task<IActionResult> CrearNcTotal(Guid cfdiId, [FromBody] CrearNcTotalRequest req, CancellationToken ct)
         {
-            var dto = await _facturacionService.CrearNotaCreditoTotalAsync(cfdiId, ct);
+            var cuentaId = Guid.Parse(User.GetCuentaId());
+            var dto = await _facturacionService.CrearNotaCreditoTotalAsync(cuentaId, req.RazonSocialId, cfdiId, ct);
             return Ok(dto);
         }
     }

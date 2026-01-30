@@ -272,6 +272,7 @@ namespace Facturacion.API.Services.Implementation
                 var cfdi = new Cfdi
                 {
                     Id = Guid.NewGuid(),
+                    RazonSocialId = req.RazonSocialId,
                     CuentaId = cuentaId,
                     ClienteId = req.ClienteId,
                     FacturamaId = facturamaId ?? "",
@@ -413,8 +414,7 @@ namespace Facturacion.API.Services.Implementation
                 await tx.CommitAsync(ct);
                 return cfdi.Id;
             }
-            catch
-            {
+            catch(Exception ex) {
                 await tx.RollbackAsync(ct);
                 throw;
             }
@@ -894,12 +894,32 @@ namespace Facturacion.API.Services.Implementation
         }
 
 
-        public async Task<CfdiCreadoDto> CrearNotaCreditoTotalAsync(Guid cfdiId, CancellationToken ct)
+        public async Task<CfdiCreadoDto> CrearNotaCreditoTotalAsync(Guid cuentaId, Guid RazonSocialId, Guid cfdiId, CancellationToken ct)
         {
             var origen = await _context.Cfdis
-                .Include(x => x.CfdiConceptos)
-                    .ThenInclude(c => c.CfdiConceptoImpuestos)
-                .FirstOrDefaultAsync(x => x.Id == cfdiId, ct);
+    .Include(x => x.CfdiConceptos)
+        .ThenInclude(c => c.CfdiConceptoImpuestos)
+    .FirstOrDefaultAsync(x =>
+        x.Id == cfdiId &&
+        x.CuentaId == cuentaId &&
+        x.RazonSocialId == RazonSocialId,
+        ct);
+
+            var emisor = await _context.RazonSocials.Include(x=>x.RegimenFiscal)
+  .AsNoTracking()
+  .FirstOrDefaultAsync(x =>
+      x.Id == RazonSocialId &&
+      x.CuentaId == cuentaId &&
+      x.Activo,
+      ct);
+
+            if (emisor is null)
+                throw new InvalidOperationException("La razón social emisora no es válida.");
+
+            if (origen is null)
+                throw new InvalidOperationException(
+                    "El CFDI origen no existe o no pertenece al emisor seleccionado."
+                );
 
             if (origen is null)
                 throw new InvalidOperationException("CFDI origen no encontrado.");
@@ -928,15 +948,15 @@ namespace Facturacion.API.Services.Implementation
 
                 Issuer = new FacturamaIssuer
                 {
-                    Rfc = origen.RfcEmisor,
-                    Name = origen.RazonSocialEmisor ?? "EMISOR",
-                    FiscalRegime = origen.EmisorRegimenFiscal ?? throw new InvalidOperationException("Falta EmisorRegimenFiscal en CFDI origen.")
+                    Rfc = emisor.Rfc.Trim(),
+                    Name = emisor.RazonSocial1.Trim(),
+                    FiscalRegime = emisor.RegimenFiscal.RegimenFiscal // o como lo tengas
                 },
 
                 Receiver = new FacturamaReceiver
                 {
                     Rfc = origen.RfcReceptor,
-                    Name = origen.RazonSocialReceptor ?? "RECEPTOR",
+                    Name = origen.RazonSocialReceptor?.Trim() ?? "RECEPTOR",
                     CfdiUse = "G02", // NC
                     FiscalRegime = origen.ReceptorRegimenFiscal ?? throw new InvalidOperationException("Falta ReceptorRegimenFiscal en CFDI origen."),
                     TaxZipCode = origen.ReceptorTaxZipCode ?? throw new InvalidOperationException("Falta ReceptorTaxZipCode en CFDI origen.")
@@ -978,7 +998,7 @@ namespace Facturacion.API.Services.Implementation
             // Llamada Facturama (tu método actual)
             var requestJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions { PropertyNamingPolicy = null });
             var (doc, responseJson) = await _facturama.CrearCfdiMultiRawAsync(payload, ct);
-
+            
             // EmitirCfdiRequest mínimo para reusar GuardarCfdiAsync
             var req = new EmitirCfdiRequest
             {
@@ -989,12 +1009,13 @@ namespace Facturacion.API.Services.Implementation
                 Currency = payload.Currency,
                 PaymentForm = payload.PaymentForm,
                 PaymentMethod = payload.PaymentMethod,
-                ExpeditionPlace = payload.ExpeditionPlace
+                ExpeditionPlace = payload.ExpeditionPlace,
+                RazonSocialId = RazonSocialId
             };
 
             // ✅ Reusar tu guardado (con relación)
             await GuardarCfdiAsync(
-                cuentaId: origen.CuentaId,
+                cuentaId: cuentaId,// 👈 IMPORTANTE
                 req: req,
                 payload: payload,
                 requestJson: requestJson,

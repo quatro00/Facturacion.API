@@ -384,6 +384,8 @@ public partial class FacturacionContext : DbContext
 
             entity.HasIndex(e => new { e.ClienteId, e.FechaTimbrado }, "IX_Cfdi_Cliente_Fecha");
 
+            entity.HasIndex(e => new { e.CuentaId, e.RazonSocialId, e.FechaTimbrado }, "IX_Cfdi_Cuenta_Emisor_Fecha").IsDescending(false, false, true);
+
             entity.HasIndex(e => new { e.CuentaId, e.FechaTimbrado }, "IX_Cfdi_Cuenta_Fecha");
 
             entity.HasIndex(e => new { e.CuentaId, e.FechaTimbrado, e.Estatus }, "IX_Cfdi_Cuenta_Fecha_Estatus");
@@ -487,6 +489,11 @@ public partial class FacturacionContext : DbContext
                 .HasForeignKey(d => d.CuentaId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Cfdi_Cuenta");
+
+            entity.HasOne(d => d.RazonSocial).WithMany(p => p.Cfdis)
+                .HasForeignKey(d => d.RazonSocialId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Cfdi_RazonSocial");
         });
 
         modelBuilder.Entity<CfdiConcepto>(entity =>
@@ -777,10 +784,6 @@ public partial class FacturacionContext : DbContext
         {
             entity.ToTable("RazonSocial");
 
-            entity.HasIndex(e => e.CuentaId, "UX_RazonSocial_Cuenta_Default")
-                .IsUnique()
-                .HasFilter("([EsDefault]=(1))");
-
             entity.HasIndex(e => new { e.CuentaId, e.Rfc }, "UX_RazonSocial_Cuenta_Rfc").IsUnique();
 
             entity.Property(e => e.Id).ValueGeneratedNever();
@@ -810,8 +813,8 @@ public partial class FacturacionContext : DbContext
             entity.Property(e => e.UsuarioCreacionId).HasMaxLength(50);
             entity.Property(e => e.UsuarioModificacionId).HasMaxLength(50);
 
-            entity.HasOne(d => d.Cuenta).WithOne(p => p.RazonSocial)
-                .HasForeignKey<RazonSocial>(d => d.CuentaId)
+            entity.HasOne(d => d.Cuenta).WithMany(p => p.RazonSocials)
+                .HasForeignKey(d => d.CuentaId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_RazonSocial_Cuenta");
 

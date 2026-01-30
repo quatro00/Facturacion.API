@@ -67,6 +67,8 @@ public partial class RazonSocial
 
     public bool TieneSellos { get; set; }
 
+    public virtual ICollection<Cfdi> Cfdis { get; set; } = new List<Cfdi>();
+
     public virtual Cuentum Cuenta { get; set; } = null!;
 
     public virtual CRegimenFiscal RegimenFiscal { get; set; } = null!;

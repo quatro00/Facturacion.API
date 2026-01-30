@@ -15,6 +15,6 @@ namespace Facturacion.API.Services.Interface
         Task<(byte[] bytes, string filename, string contentType)> GetZipAsync(string id, string type, CancellationToken ct);
         Task<ReenviarCfdiResponseDto> ReenviarCfdiAsync(Guid cfdiId, Guid cuentaId, ReenviarCfdiRequestDto req, CancellationToken ct = default);
         Task<CfdiDetalleDto> GetCfdiDetalleAsync(Guid cfdiId, Guid cuentaId, CancellationToken ct);
-        Task<CfdiCreadoDto> CrearNotaCreditoTotalAsync(Guid cfdiId, CancellationToken ct);
+        Task<CfdiCreadoDto> CrearNotaCreditoTotalAsync(Guid cuentaId, Guid RazonSocialId, Guid cfdiId, CancellationToken ct);
     }
 }

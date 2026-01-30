@@ -79,6 +79,8 @@ public partial class Cfdi
 
     public string? TipoRelacionSat { get; set; }
 
+    public Guid RazonSocialId { get; set; }
+
     public virtual ICollection<CfdiConcepto> CfdiConceptos { get; set; } = new List<CfdiConcepto>();
 
     public virtual ICollection<CfdiEstatusHistorial> CfdiEstatusHistorials { get; set; } = new List<CfdiEstatusHistorial>();
@@ -94,4 +96,6 @@ public partial class Cfdi
     public virtual Cuentum Cuenta { get; set; } = null!;
 
     public virtual ICollection<Cfdi> InverseCfdiOrigen { get; set; } = new List<Cfdi>();
+
+    public virtual RazonSocial RazonSocial { get; set; } = null!;
 }
