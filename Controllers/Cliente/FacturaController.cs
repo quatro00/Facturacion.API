@@ -17,14 +17,21 @@ namespace Facturacion.API.Controllers.Cliente
         public FacturaController(IFacturacionService facturacionService) => _facturacionService = facturacionService;
 
         [Authorize(Roles = "Cliente")]
-        [HttpPost("emitir-multi")]
+        [HttpPost("emitir")]
         public async Task<IActionResult> EmitirMulti([FromBody] EmitirCfdiRequest req, CancellationToken ct)
         {
-            if (string.IsNullOrWhiteSpace(req.CfdiType))
-                req.CfdiType = "I";
+            if (req == null) return BadRequest("Request inválido.");
+            if (req.RazonSocialId == Guid.Empty) return BadRequest("RazonSocialId es requerido.");
+            if (req.ClienteId == Guid.Empty) return BadRequest("ClienteId es requerido.");
+            if (req.Items == null || req.Items.Count == 0) return BadRequest("Debe incluir al menos un concepto.");
+
+            req.CfdiType = string.IsNullOrWhiteSpace(req.CfdiType) ? "I" : req.CfdiType.Trim().ToUpperInvariant();
+
             var cuentaId = Guid.Parse(User.GetCuentaId());
-            var result = await _facturacionService.EmitirCfdiMultiAsync(req,Guid.Parse(User.GetCuentaId()), ct);
-            return Ok(result.RootElement); // o mapear a tu propio DTO
+
+            var result = await _facturacionService.EmitirCfdiMultiAsync(req, cuentaId, ct);
+
+            return Ok(result.RootElement);
         }
 
         [Authorize(Roles = "Cliente")]

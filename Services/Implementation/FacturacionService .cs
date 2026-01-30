@@ -59,7 +59,7 @@ namespace Facturacion.API.Services.Implementation
             // 3) Emisor por cuenta
             var emisor = await _context.RazonSocials
                 .Include(x => x.RegimenFiscal)
-                .FirstOrDefaultAsync(x => x.CuentaId == cuentaId, ct);
+                .FirstOrDefaultAsync(x => x.Id == req.RazonSocialId, ct);
 
             if (emisor is null)
                 throw new InvalidOperationException("No hay emisor configurado");

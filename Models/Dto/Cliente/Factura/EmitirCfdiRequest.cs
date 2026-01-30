@@ -2,6 +2,7 @@
 {
     public class EmitirCfdiRequest
     {
+        public Guid RazonSocialId { get; set; }
         public Guid ClienteId { get; set; }//si
         public string? Serie { get; set; }//si
         public string? Folio { get; set; }//si
