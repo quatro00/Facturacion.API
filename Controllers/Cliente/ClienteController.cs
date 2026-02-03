@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Facturacion.API.Controllers.Cliente
 {
+    [Authorize(Roles = "Cliente")]
     [Route("api/cliente/[controller]")]
     [ApiController]
     public class ClienteController : ControllerBase

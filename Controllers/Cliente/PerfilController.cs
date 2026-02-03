@@ -24,6 +24,7 @@ using static iText.StyledXmlParser.Jsoup.Select.Evaluator;
 
 namespace Facturacion.API.Controllers.Cliente
 {
+    [Authorize(Roles = "Cliente")]
     [Route("api/cliente/[controller]")]
     [ApiController]
     public class PerfilController : ControllerBase

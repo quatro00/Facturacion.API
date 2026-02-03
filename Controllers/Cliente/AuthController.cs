@@ -3,6 +3,7 @@ using Facturacion.API.Models.Domain;
 using Facturacion.API.Models.Dto.Auth;
 using Facturacion.API.Models.Dto.Cliente;
 using Facturacion.API.Repositories.Interface;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;

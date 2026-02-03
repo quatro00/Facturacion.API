@@ -12,6 +12,7 @@ using Microsoft.CodeAnalysis.Elfie.Serialization;
 
 namespace Facturacion.API.Controllers.Cliente
 {
+    [Authorize(Roles = "Cliente")]
     [Route("api/cliente/[controller]")]
     [ApiController]
     public class CatalogosController : ControllerBase
