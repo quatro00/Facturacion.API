@@ -72,4 +72,6 @@ public partial class RazonSocial
     public virtual Cuentum Cuenta { get; set; } = null!;
 
     public virtual CRegimenFiscal RegimenFiscal { get; set; } = null!;
+
+    public virtual SucursalRazonSocial? SucursalRazonSocial { get; set; }
 }

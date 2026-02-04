@@ -19,5 +19,11 @@ public partial class Cuentum
 
     public virtual ICollection<RazonSocial> RazonSocials { get; set; } = new List<RazonSocial>();
 
+    public virtual ICollection<SucursalRazonSocial> SucursalRazonSocials { get; set; } = new List<SucursalRazonSocial>();
+
+    public virtual ICollection<SucursalSerie> SucursalSeries { get; set; } = new List<SucursalSerie>();
+
+    public virtual ICollection<Sucursal> Sucursals { get; set; } = new List<Sucursal>();
+
     public virtual AspNetUser User { get; set; } = null!;
 }

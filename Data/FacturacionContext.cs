@@ -80,6 +80,12 @@ public partial class FacturacionContext : DbContext
 
     public virtual DbSet<SistemaRolUsuario> SistemaRolUsuarios { get; set; }
 
+    public virtual DbSet<Sucursal> Sucursals { get; set; }
+
+    public virtual DbSet<SucursalRazonSocial> SucursalRazonSocials { get; set; }
+
+    public virtual DbSet<SucursalSerie> SucursalSeries { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see http://go.microsoft.com/fwlink/?LinkId=723263.
         => optionsBuilder.UseSqlServer("Data Source=DESKTOP-JM00DK5;Initial Catalog=Facturacion;Persist Security Info=True;User ID=sa;Password=sql2;TrustServerCertificate=True");
@@ -380,7 +386,7 @@ public partial class FacturacionContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("PK__Cfdi__3214EC071EC437D1");
 
-            entity.ToTable("Cfdi");
+            entity.ToTable("Cfdi", tb => tb.HasTrigger("TR_Cfdi_ValidateSucursalCuenta"));
 
             entity.HasIndex(e => new { e.ClienteId, e.FechaTimbrado }, "IX_Cfdi_Cliente_Fecha");
 
@@ -391,6 +397,10 @@ public partial class FacturacionContext : DbContext
             entity.HasIndex(e => new { e.CuentaId, e.FechaTimbrado, e.Estatus }, "IX_Cfdi_Cuenta_Fecha_Estatus");
 
             entity.HasIndex(e => new { e.CuentaId, e.Serie, e.Folio }, "IX_Cfdi_Cuenta_SerieFolio");
+
+            entity.HasIndex(e => new { e.CuentaId, e.SucursalId, e.FechaTimbrado }, "IX_Cfdi_Cuenta_Sucursal_Fecha");
+
+            entity.HasIndex(e => new { e.RazonSocialId, e.SucursalId, e.FechaTimbrado }, "IX_Cfdi_RazonSocial_Sucursal_Fecha");
 
             entity.HasIndex(e => new { e.Serie, e.Folio }, "IX_Cfdi_SerieFolio");
 
@@ -404,10 +414,7 @@ public partial class FacturacionContext : DbContext
             entity.Property(e => e.CfdiStatusId).HasDefaultValueSql("((2))");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
             entity.Property(e => e.Descuento).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.EmisorRegimenFiscal)
-                .HasMaxLength(3)
-                .IsUnicode(false)
-                .IsFixedLength();
+            entity.Property(e => e.EmisorRegimenFiscal).HasMaxLength(50);
             entity.Property(e => e.Estatus).HasMaxLength(30);
             entity.Property(e => e.EstatusCancelacionSat).HasMaxLength(30);
             entity.Property(e => e.Exportacion)
@@ -439,14 +446,8 @@ public partial class FacturacionContext : DbContext
             entity.Property(e => e.Pac).HasMaxLength(50);
             entity.Property(e => e.RazonSocialEmisor).HasMaxLength(150);
             entity.Property(e => e.RazonSocialReceptor).HasMaxLength(150);
-            entity.Property(e => e.ReceptorRegimenFiscal)
-                .HasMaxLength(3)
-                .IsUnicode(false)
-                .IsFixedLength();
-            entity.Property(e => e.ReceptorTaxZipCode)
-                .HasMaxLength(5)
-                .IsUnicode(false)
-                .IsFixedLength();
+            entity.Property(e => e.ReceptorRegimenFiscal).HasMaxLength(50);
+            entity.Property(e => e.ReceptorTaxZipCode).HasMaxLength(50);
             entity.Property(e => e.RfcEmisor)
                 .HasMaxLength(13)
                 .IsUnicode(false)
@@ -466,10 +467,7 @@ public partial class FacturacionContext : DbContext
                 .IsUnicode(false)
                 .IsFixedLength();
             entity.Property(e => e.Total).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.UsoCfdi)
-                .HasMaxLength(3)
-                .IsUnicode(false)
-                .IsFixedLength();
+            entity.Property(e => e.UsoCfdi).HasMaxLength(50);
 
             entity.HasOne(d => d.CfdiOrigen).WithMany(p => p.InverseCfdiOrigen)
                 .HasForeignKey(d => d.CfdiOrigenId)
@@ -494,6 +492,10 @@ public partial class FacturacionContext : DbContext
                 .HasForeignKey(d => d.RazonSocialId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Cfdi_RazonSocial");
+
+            entity.HasOne(d => d.Sucursal).WithMany(p => p.Cfdis)
+                .HasForeignKey(d => d.SucursalId)
+                .HasConstraintName("FK_Cfdi_Sucursal");
         });
 
         modelBuilder.Entity<CfdiConcepto>(entity =>
@@ -867,6 +869,125 @@ public partial class FacturacionContext : DbContext
                 .HasForeignKey(d => new { d.SistemaId, d.Rol })
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_SistemaRolOrganizacion_SistemaRol");
+        });
+
+        modelBuilder.Entity<Sucursal>(entity =>
+        {
+            entity.ToTable("Sucursal");
+
+            entity.HasIndex(e => new { e.CuentaId, e.Activo }, "IX_Sucursal_Cuenta_Activo").HasFilter("([IsDeleted]=(0))");
+
+            entity.HasIndex(e => new { e.CuentaId, e.Codigo }, "UX_Sucursal_Cuenta_Codigo")
+                .IsUnique()
+                .HasFilter("([IsDeleted]=(0))");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.Activo)
+                .IsRequired()
+                .HasDefaultValueSql("((1))");
+            entity.Property(e => e.Calle).HasMaxLength(120);
+            entity.Property(e => e.Codigo).HasMaxLength(10);
+            entity.Property(e => e.CodigoPostal).HasMaxLength(5);
+            entity.Property(e => e.Colonia).HasMaxLength(120);
+            entity.Property(e => e.Email).HasMaxLength(254);
+            entity.Property(e => e.Estado).HasMaxLength(100);
+            entity.Property(e => e.FechaCreacion)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.FechaEliminacion).HasColumnType("datetime");
+            entity.Property(e => e.FechaModificacion).HasColumnType("datetime");
+            entity.Property(e => e.Municipio).HasMaxLength(100);
+            entity.Property(e => e.NoExterior).HasMaxLength(20);
+            entity.Property(e => e.NoInterior).HasMaxLength(20);
+            entity.Property(e => e.Nombre).HasMaxLength(150);
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+            entity.Property(e => e.Telefono).HasMaxLength(20);
+            entity.Property(e => e.UsuarioCreacionId).HasMaxLength(50);
+            entity.Property(e => e.UsuarioEliminacionId).HasMaxLength(50);
+            entity.Property(e => e.UsuarioModificacionId).HasMaxLength(50);
+
+            entity.HasOne(d => d.Cuenta).WithMany(p => p.Sucursals)
+                .HasForeignKey(d => d.CuentaId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Sucursal_Cuenta");
+        });
+
+        modelBuilder.Entity<SucursalRazonSocial>(entity =>
+        {
+            entity.ToTable("SucursalRazonSocial", tb => tb.HasTrigger("TR_SucursalRazonSocial_ValidateCuenta"));
+
+            entity.HasIndex(e => new { e.RazonSocialId, e.Activo }, "IX_SucursalRazonSocial_RazonSocial");
+
+            entity.HasIndex(e => new { e.SucursalId, e.Activo }, "IX_SucursalRazonSocial_Sucursal");
+
+            entity.HasIndex(e => e.RazonSocialId, "UX_SucursalRazonSocial_DefaultPorRazonSocial")
+                .IsUnique()
+                .HasFilter("([EsDefault]=(1) AND [Activo]=(1))");
+
+            entity.HasIndex(e => new { e.SucursalId, e.RazonSocialId }, "UX_SucursalRazonSocial_Sucursal_RazonSocial").IsUnique();
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.Activo)
+                .IsRequired()
+                .HasDefaultValueSql("((1))");
+            entity.Property(e => e.FechaCreacion)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.UsuarioCreacionId).HasMaxLength(50);
+
+            entity.HasOne(d => d.Cuenta).WithMany(p => p.SucursalRazonSocials)
+                .HasForeignKey(d => d.CuentaId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_SucursalRazonSocial_Cuenta");
+
+            entity.HasOne(d => d.RazonSocial).WithOne(p => p.SucursalRazonSocial)
+                .HasForeignKey<SucursalRazonSocial>(d => d.RazonSocialId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_SucursalRazonSocial_RazonSocial");
+
+            entity.HasOne(d => d.Sucursal).WithMany(p => p.SucursalRazonSocials)
+                .HasForeignKey(d => d.SucursalId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_SucursalRazonSocial_Sucursal");
+        });
+
+        modelBuilder.Entity<SucursalSerie>(entity =>
+        {
+            entity.ToTable("SucursalSerie");
+
+            entity.HasIndex(e => new { e.SucursalId, e.Concepto }, "UX_SucursalSerie_Sucursal_Concepto").IsUnique();
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.Activo)
+                .IsRequired()
+                .HasDefaultValueSql("((1))");
+            entity.Property(e => e.Concepto)
+                .HasMaxLength(50)
+                .IsUnicode(false)
+                .HasDefaultValueSql("('')");
+            entity.Property(e => e.FechaCreacion)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.FechaModificacion).HasColumnType("datetime");
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+            entity.Property(e => e.Serie).HasMaxLength(10);
+            entity.Property(e => e.TipoCfdi).HasMaxLength(10);
+            entity.Property(e => e.UsuarioCreacionId).HasMaxLength(50);
+            entity.Property(e => e.UsuarioModificacionId).HasMaxLength(50);
+
+            entity.HasOne(d => d.Cuenta).WithMany(p => p.SucursalSeries)
+                .HasForeignKey(d => d.CuentaId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_SucursalSerie_Cuenta");
+
+            entity.HasOne(d => d.Sucursal).WithMany(p => p.SucursalSeries)
+                .HasForeignKey(d => d.SucursalId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_SucursalSerie_Sucursal");
         });
 
         OnModelCreatingPartial(modelBuilder);

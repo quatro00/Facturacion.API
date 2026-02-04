@@ -81,6 +81,8 @@ public partial class Cfdi
 
     public Guid RazonSocialId { get; set; }
 
+    public Guid? SucursalId { get; set; }
+
     public virtual ICollection<CfdiConcepto> CfdiConceptos { get; set; } = new List<CfdiConcepto>();
 
     public virtual ICollection<CfdiEstatusHistorial> CfdiEstatusHistorials { get; set; } = new List<CfdiEstatusHistorial>();
@@ -98,4 +100,6 @@ public partial class Cfdi
     public virtual ICollection<Cfdi> InverseCfdiOrigen { get; set; } = new List<Cfdi>();
 
     public virtual RazonSocial RazonSocial { get; set; } = null!;
+
+    public virtual Sucursal? Sucursal { get; set; }
 }
