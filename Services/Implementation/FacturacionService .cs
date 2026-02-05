@@ -519,7 +519,8 @@ namespace Facturacion.API.Services.Implementation
                 await tx.CommitAsync(ct);
                 return cfdi.Id;
             }
-            catch(Exception ex) {
+            catch (Exception ex)
+            {
                 await tx.RollbackAsync(ct);
                 throw;
             }
@@ -1010,7 +1011,7 @@ namespace Facturacion.API.Services.Implementation
         x.RazonSocialId == RazonSocialId,
         ct);
 
-            var emisor = await _context.RazonSocials.Include(x=>x.RegimenFiscal)
+            var emisor = await _context.RazonSocials.Include(x => x.RegimenFiscal)
   .AsNoTracking()
   .FirstOrDefaultAsync(x =>
       x.Id == RazonSocialId &&
@@ -1103,7 +1104,7 @@ namespace Facturacion.API.Services.Implementation
             // Llamada Facturama (tu método actual)
             var requestJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions { PropertyNamingPolicy = null });
             var (doc, responseJson) = await _facturama.CrearCfdiMultiRawAsync(payload, ct);
-            
+
             // EmitirCfdiRequest mínimo para reusar GuardarCfdiAsync
             var req = new EmitirCfdiRequest
             {
@@ -1152,5 +1153,517 @@ namespace Facturacion.API.Services.Implementation
 
             return nc;
         }
+
+        public async Task<CfdiCreadoDto> CrearNotaCreditoParcialMontoAsync(
+    Guid cuentaId,
+    NotaCreditoParcialMontoRequest input,
+    CancellationToken ct)
+        {
+            if (input.Monto <= 0)
+                throw new InvalidOperationException("El monto debe ser mayor a 0.");
+
+            var origen = await _context.Cfdis
+    .Include(x => x.CfdiConceptos)
+        .ThenInclude(c => c.CfdiConceptoImpuestos)
+    .FirstOrDefaultAsync(x =>
+        x.Id == input.CfdiOrigenId &&
+        x.CuentaId == cuentaId,
+        ct);
+
+            if (origen is null)
+                throw new InvalidOperationException("CFDI no encontrado.");
+
+            var razonSocialId = origen.RazonSocialId;
+            var sucursal = await _context.Sucursals
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == origen.SucursalId && x.CuentaId == cuentaId && !x.IsDeleted, ct);
+
+
+            var emisor = await _context.RazonSocials
+                .Include(x => x.RegimenFiscal)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.Id == razonSocialId &&
+                    x.CuentaId == cuentaId &&
+                    x.Activo,
+                    ct);
+
+            if (emisor is null)
+                throw new InvalidOperationException("La razón social emisora no es válida.");
+
+            if (origen is null)
+                throw new InvalidOperationException("El CFDI origen no existe o no pertenece al emisor seleccionado.");
+
+            if (!string.Equals(origen.TipoCfdi, "I", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Solo se puede generar NC desde CFDI de Ingreso (I).");
+
+            if (!string.Equals(origen.Estatus, "TIMBRADO", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("El CFDI origen debe estar TIMBRADO.");
+
+            // Límite: no acreditar más del total del CFDI
+            if (origen.Total > 0 && input.Monto > origen.Total)
+                throw new InvalidOperationException("El monto no puede ser mayor al total del CFDI origen.");
+
+            // 1) Regla simple para IVA:
+            // Si el CFDI origen trae algún impuesto IVA trasladado con tasa 0.16 en cualquiera de sus conceptos => aplicamos IVA 16%.
+            // Si no, hacemos NC sin impuestos.
+            var aplicaIva16 = origen.CfdiConceptos
+                .SelectMany(c => c.CfdiConceptoImpuestos)
+                .Any(t =>
+                    !t.EsRetencion &&
+                    string.Equals(t.TipoImpuesto, "IVA", StringComparison.OrdinalIgnoreCase) &&
+                    t.Tasa == 0.16m);
+
+            decimal tasaIva = 0.16m;
+            decimal baseAmount;
+            decimal ivaAmount;
+
+            if (aplicaIva16)
+            {
+                // monto es TOTAL (con IVA)
+                baseAmount = Math.Round(input.Monto / (1m + tasaIva), 2, MidpointRounding.AwayFromZero);
+                ivaAmount = Math.Round(baseAmount * tasaIva, 2, MidpointRounding.AwayFromZero);
+            }
+            else
+            {
+                baseAmount = Math.Round(input.Monto, 2, MidpointRounding.AwayFromZero);
+                ivaAmount = 0m;
+            }
+
+            var totalAmount = Math.Round(baseAmount + ivaAmount, 2, MidpointRounding.AwayFromZero);
+
+            var taxes = new List<FacturamaTax>();
+            var taxObject = aplicaIva16 ? "02" : "01";
+
+            if (aplicaIva16 && ivaAmount > 0m)
+            {
+                taxes.Add(new FacturamaTax
+                {
+                    Name = "IVA",
+                    Rate = tasaIva,
+                    Base = baseAmount,
+                    Total = ivaAmount,
+                    IsRetention = false
+                });
+            }
+
+            // 2) Item genérico
+            var item = new FacturamaItem
+            {
+                ProductCode = "84111506", // servicios de facturación / genérico común
+                UnitCode = "ACT",
+                Description = "Bonificación / ajuste (NC parcial por monto)",
+                Quantity = 1m,
+                UnitPrice = baseAmount,
+                Discount = 0,
+                Unit = "ACT",
+                IdentificationNumber = null,
+                Subtotal = baseAmount,
+                TaxObject = taxObject,
+                Taxes = taxes,
+                Total = totalAmount
+            };
+
+
+            //---SERIE Y FOLIO
+            string serie = "";
+            string folio = "";
+
+            using var tx = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+            string concepto = "E_DESCUENTOS";
+
+            var serieRow = await _context.SucursalSeries
+                .FromSqlInterpolated($@"
+                SELECT *
+                FROM dbo.SucursalSerie WITH (UPDLOCK, HOLDLOCK)
+                WHERE CuentaId  = {cuentaId}
+                  AND SucursalId = {origen.SucursalId}
+                  AND Concepto  = {concepto}
+                  AND Activo = 1
+            ")
+                .FirstOrDefaultAsync(ct);
+
+            if (serieRow is null || string.IsNullOrWhiteSpace(serieRow.Serie))
+            {
+                var humano = concepto switch
+                {
+                    "I_MERCANCIAS" => "Mercancías",
+                    "I_SERVICIOS" => "Servicios",
+                    "I_ANTICIPO" => "Anticipo",
+                    _ => concepto
+                };
+
+                // ✅ Error más descriptivo
+                throw new InvalidOperationException(
+                    $"No está configurada la serie para '{humano}' en la sucursal '{sucursal.Codigo} - {sucursal.Nombre}'. " +
+                    $"Configúrala en: Sucursales → Detalle → Series (Concepto {concepto})."
+                );
+            }
+
+            // siguiente folio = FolioActual + 1
+            // (si FolioActual es null en tu entidad, ajusta a nullable)
+            var folioActual = serieRow.FolioActual;
+            if (folioActual < 0) folioActual = 0;
+
+            var nextFolio = folioActual + 1;
+
+            serie = serieRow.Serie.Trim().ToUpperInvariant();
+            folio = nextFolio.ToString();
+
+            // actualiza folio actual
+            serieRow.FolioActual = nextFolio;
+
+            // si tienes estos campos, déjalos; si no existen en la entidad, quítalos
+            serieRow.FechaModificacion = DateTime.Now;
+
+            await _context.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            // 3) Payload (OJO: idealmente serie/folio propios de E, aquí lo dejo como tu versión)
+            var payload = new FacturamaCfdiRequest
+            {
+                Date = DateTimeOffset.Now.ToString("yyyy-MM-ddTHH:mm:ss"),
+                Serie = serie,
+                Folio = folio,
+                CfdiType = "E",
+                NameId = "2",
+
+                Currency = origen.Moneda,
+                ExpeditionPlace = origen.LugarExpedicion,
+                Exportation = string.IsNullOrWhiteSpace(origen.Exportacion) ? "01" : origen.Exportacion,
+
+                PaymentForm = "99",
+                PaymentMethod = "PUE",
+
+                Issuer = new FacturamaIssuer
+                {
+                    Rfc = emisor.Rfc.Trim(),
+                    Name = emisor.RazonSocial1.Trim(),
+                    FiscalRegime = emisor.RegimenFiscal.RegimenFiscal
+                },
+
+                Receiver = new FacturamaReceiver
+                {
+                    Rfc = origen.RfcReceptor,
+                    Name = origen.RazonSocialReceptor?.Trim() ?? "RECEPTOR",
+                    CfdiUse = "G02",
+                    FiscalRegime = origen.ReceptorRegimenFiscal ?? throw new InvalidOperationException("Falta ReceptorRegimenFiscal en CFDI origen."),
+                    TaxZipCode = origen.ReceptorTaxZipCode ?? throw new InvalidOperationException("Falta ReceptorTaxZipCode en CFDI origen.")
+                },
+
+                Relations = new FacturamaRelations
+                {
+                    Type = "01",
+                    Cfdis = new List<FacturamaRelatedCfdi> { new() { Uuid = origen.Uuid.ToString() } }
+                },
+
+                Items = new List<FacturamaItem> { item }
+            };
+
+            var requestJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions { PropertyNamingPolicy = null });
+            var (doc, responseJson) = await _facturama.CrearCfdiMultiRawAsync(payload, ct);
+
+            var req = new EmitirCfdiRequest
+            {
+                ClienteId = origen.ClienteId,
+                Serie = payload.Serie,
+                Folio = payload.Folio,
+                CfdiType = "E",
+                Currency = payload.Currency,
+                PaymentForm = payload.PaymentForm,
+                PaymentMethod = payload.PaymentMethod,
+                ExpeditionPlace = payload.ExpeditionPlace,
+                RazonSocialId = razonSocialId
+            };
+
+            await GuardarCfdiAsync(
+                cuentaId: cuentaId,
+                req: req,
+                payload: payload,
+                requestJson: requestJson,
+                responseJson: responseJson,
+                facturamaDoc: doc,
+                ct: ct,
+                cfdiOrigenId: origen.Id,
+                tipoRelacionSat: "01"
+            );
+
+            var uuidNc = Guid.Parse(doc.RootElement.GetProperty("Complement").GetProperty("TaxStamp").GetProperty("Uuid").GetString()!);
+
+            return await _context.Cfdis
+                .AsNoTracking()
+                .Where(x => x.Uuid == uuidNc)
+                .Select(x => new CfdiCreadoDto
+                {
+                    Id = x.Id,
+                    Uuid = x.Uuid.ToString(),
+                    FacturamaId = x.FacturamaId,
+                    Serie = x.Serie,
+                    Folio = x.Folio,
+                    Total = x.Total
+                })
+                .FirstAsync(ct);
+        }
+
+        public async Task<CfdiCreadoDto> CrearNotaCreditoDevolucionAsync(
+    Guid cuentaId,
+    Guid cfdiId,
+    List<CrearNcDevolucionConceptoRequest> conceptosReq,
+    CancellationToken ct)
+        {
+            var origen = await _context.Cfdis
+                .Include(x => x.CfdiConceptos)
+                    .ThenInclude(c => c.CfdiConceptoImpuestos)
+                .FirstOrDefaultAsync(x =>
+                    x.Id == cfdiId &&
+                    x.CuentaId == cuentaId,
+                    ct);
+
+            if (origen is null)
+                throw new InvalidOperationException("El CFDI origen no existe.");
+
+            if (!string.Equals(origen.TipoCfdi, "I", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Solo se puede generar NC desde CFDI de Ingreso (I).");
+
+            if (!string.Equals(origen.Estatus, "TIMBRADO", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("El CFDI origen debe estar TIMBRADO.");
+
+            var emisor = await _context.RazonSocials
+                .Include(x => x.RegimenFiscal)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.Id == origen.RazonSocialId &&
+                    x.CuentaId == cuentaId &&
+                    x.Activo,
+                    ct);
+
+            if (emisor is null)
+                throw new InvalidOperationException("La razón social emisora no es válida.");
+
+            if (origen.SucursalId == null || origen.SucursalId == Guid.Empty)
+                throw new InvalidOperationException("El CFDI origen no tiene SucursalId.");
+
+            var sucursal = await _context.Sucursals
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == origen.SucursalId && x.CuentaId == cuentaId && !x.IsDeleted, ct);
+
+            // 1) Tomar Serie/Folio de devoluciones (ajusta el concepto a tu catálogo)
+            //-----SERIE Y FOLIO
+            //---SERIE Y FOLIO
+            string serie = "";
+            string folio = "";
+
+            using var tx = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+            string concepto = "E_DEVOLUCIONES";
+
+            var serieRow = await _context.SucursalSeries
+                .FromSqlInterpolated($@"
+                SELECT *
+                FROM dbo.SucursalSerie WITH (UPDLOCK, HOLDLOCK)
+                WHERE CuentaId  = {cuentaId}
+                  AND SucursalId = {origen.SucursalId}
+                  AND Concepto  = {concepto}
+                  AND Activo = 1
+            ")
+                .FirstOrDefaultAsync(ct);
+
+            if (serieRow is null || string.IsNullOrWhiteSpace(serieRow.Serie))
+            {
+                var humano = concepto switch
+                {
+                    "I_MERCANCIAS" => "Mercancías",
+                    "I_SERVICIOS" => "Servicios",
+                    "I_ANTICIPO" => "Anticipo",
+                    "E_DEVOLUCIONES" => "Devoluciones",
+                    _ => concepto
+                };
+
+                // ✅ Error más descriptivo
+                throw new InvalidOperationException(
+                    $"No está configurada la serie para '{humano}' en la sucursal '{sucursal.Codigo} - {sucursal.Nombre}'. " +
+                    $"Configúrala en: Sucursales → Detalle → Series (Concepto {concepto})."
+                );
+            }
+
+            // siguiente folio = FolioActual + 1
+            // (si FolioActual es null en tu entidad, ajusta a nullable)
+            var folioActual = serieRow.FolioActual;
+            if (folioActual < 0) folioActual = 0;
+
+            var nextFolio = folioActual + 1;
+
+            serie = serieRow.Serie.Trim().ToUpperInvariant();
+            folio = nextFolio.ToString();
+
+            // actualiza folio actual
+            serieRow.FolioActual = nextFolio;
+
+            // si tienes estos campos, déjalos; si no existen en la entidad, quítalos
+            serieRow.FechaModificacion = DateTime.Now;
+
+            await _context.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            //---TERMINA SERIE Y FOLIO
+
+            // 2) Validar y construir items NC
+            var conceptosById = origen.CfdiConceptos.ToDictionary(x => x.Id, x => x);
+
+            // evita duplicados en request
+            var reqAgrupado = conceptosReq
+                .GroupBy(x => x.CfdiConceptoId)
+                .Select(g => new { CfdiConceptoId = g.Key, Cantidad = g.Sum(x => x.Cantidad) })
+                .ToList();
+
+            var itemsNc = new List<FacturamaItem>();
+
+            foreach (var r in reqAgrupado)
+            {
+                if (!conceptosById.TryGetValue(r.CfdiConceptoId, out var con))
+                    throw new InvalidOperationException($"El concepto {r.CfdiConceptoId} no pertenece al CFDI origen.");
+
+                if (r.Cantidad > con.Cantidad)
+                    throw new InvalidOperationException($"La cantidad a devolver ({r.Cantidad}) excede la cantidad facturada ({con.Cantidad}) en '{con.Descripcion}'.");
+
+                // Proporción por cantidad
+                var proporcion = con.Cantidad == 0 ? 0 : (r.Cantidad / con.Cantidad);
+
+                var qty = r.Cantidad;
+                var unitPrice = con.ValorUnitario;
+
+                var discount = R2((con.Descuento) * proporcion);
+                var subtotal = R2((qty * unitPrice) - discount);
+
+                // Impuestos proporcionales (tomando lo guardado en el origen)
+                var taxes = con.CfdiConceptoImpuestos.Select(imp =>
+                {
+                    var baseNc = R2(imp.Base * proporcion);
+                    var totalNc = R2(imp.Importe * proporcion);
+
+                    return new FacturamaTax
+                    {
+                        Name = imp.TipoImpuesto,
+                        Rate = imp.Tasa,
+                        Base = baseNc,
+                        Total = totalNc,
+                        IsRetention = imp.EsRetencion
+                    };
+                }).ToList();
+
+                var traslados = taxes.Where(t => !t.IsRetention).Sum(t => t.Total);
+                var retenciones = taxes.Where(t => t.IsRetention).Sum(t => t.Total);
+                var total = R2(subtotal + traslados - retenciones);
+
+                itemsNc.Add(new FacturamaItem
+                {
+                    ProductCode = con.ClaveProdServ,
+                    UnitCode = con.ClaveUnidad ?? "H87",
+                    Description = con.Descripcion,
+                    Quantity = qty,
+                    UnitPrice = unitPrice,
+                    Discount = discount,
+                    Unit = con.Unidad,
+                    IdentificationNumber = con.NoIdentificacion,
+                    Subtotal = subtotal,
+                    TaxObject = con.ObjetoImp,
+                    Taxes = taxes,
+                    Total = total
+                });
+            }
+
+            if (itemsNc.Count == 0)
+                throw new InvalidOperationException("No se generaron conceptos para la nota de crédito.");
+
+            // 3) Payload Facturama
+            var payload = new FacturamaCfdiRequest
+            {
+                Date = DateTimeOffset.Now.ToString("yyyy-MM-ddTHH:mm:ss"),
+                Serie = serie,
+                Folio = folio.ToString(),
+                CfdiType = "E",
+                NameId = "2",
+
+                Currency = origen.Moneda,
+                ExpeditionPlace = origen.LugarExpedicion,
+                Exportation = string.IsNullOrWhiteSpace(origen.Exportacion) ? "01" : origen.Exportacion,
+
+                PaymentForm = "99",
+                PaymentMethod = "PUE",
+
+                Issuer = new FacturamaIssuer
+                {
+                    Rfc = emisor.Rfc.Trim(),
+                    Name = emisor.RazonSocial1.Trim(),
+                    FiscalRegime = emisor.RegimenFiscal.RegimenFiscal
+                },
+
+                Receiver = new FacturamaReceiver
+                {
+                    Rfc = origen.RfcReceptor,
+                    Name = origen.RazonSocialReceptor?.Trim() ?? "RECEPTOR",
+                    CfdiUse = "G02",
+                    FiscalRegime = origen.ReceptorRegimenFiscal ?? throw new InvalidOperationException("Falta ReceptorRegimenFiscal en CFDI origen."),
+                    TaxZipCode = origen.ReceptorTaxZipCode ?? throw new InvalidOperationException("Falta ReceptorTaxZipCode en CFDI origen.")
+                },
+
+                Relations = new FacturamaRelations
+                {
+                    Type = "01",
+                    Cfdis = new List<FacturamaRelatedCfdi> { new() { Uuid = origen.Uuid.ToString() } }
+                },
+
+                Items = itemsNc
+            };
+
+            // 4) Timbrar + Guardar
+            var requestJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions { PropertyNamingPolicy = null });
+            var (doc, responseJson) = await _facturama.CrearCfdiMultiRawAsync(payload, ct);
+
+            var reqEmitir = new EmitirCfdiRequest
+            {
+                ClienteId = origen.ClienteId,
+                Serie = payload.Serie,
+                Folio = payload.Folio,
+                CfdiType = "E",
+                Currency = payload.Currency,
+                PaymentForm = payload.PaymentForm,
+                PaymentMethod = payload.PaymentMethod,
+                ExpeditionPlace = payload.ExpeditionPlace,
+                RazonSocialId = origen.RazonSocialId
+            };
+
+            await GuardarCfdiAsync(
+                cuentaId: cuentaId,
+                req: reqEmitir,
+                payload: payload,
+                requestJson: requestJson,
+                responseJson: responseJson,
+                facturamaDoc: doc,
+                ct: ct,
+                cfdiOrigenId: origen.Id,
+                tipoRelacionSat: "01"
+            );
+
+            var uuidNc = Guid.Parse(
+                doc.RootElement.GetProperty("Complement")
+                   .GetProperty("TaxStamp")
+                   .GetProperty("Uuid")
+                   .GetString()!
+            );
+
+            return await _context.Cfdis
+                .AsNoTracking()
+                .Where(x => x.Uuid == uuidNc)
+                .Select(x => new CfdiCreadoDto
+                {
+                    Id = x.Id,
+                    Uuid = x.Uuid.ToString(),
+                    FacturamaId = x.FacturamaId,
+                    Serie = x.Serie,
+                    Folio = x.Folio,
+                    Total = x.Total
+                })
+                .FirstAsync(ct);
+        }
+
+      
     }
 }

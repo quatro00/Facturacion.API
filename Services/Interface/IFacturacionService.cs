@@ -16,5 +16,7 @@ namespace Facturacion.API.Services.Interface
         Task<ReenviarCfdiResponseDto> ReenviarCfdiAsync(Guid cfdiId, Guid cuentaId, ReenviarCfdiRequestDto req, CancellationToken ct = default);
         Task<CfdiDetalleDto> GetCfdiDetalleAsync(Guid cfdiId, Guid cuentaId, CancellationToken ct);
         Task<CfdiCreadoDto> CrearNotaCreditoTotalAsync(Guid cuentaId, Guid RazonSocialId, Guid cfdiId, CancellationToken ct);
+        Task<CfdiCreadoDto> CrearNotaCreditoParcialMontoAsync(Guid cuentaId, NotaCreditoParcialMontoRequest input, CancellationToken ct);
+        Task<CfdiCreadoDto> CrearNotaCreditoDevolucionAsync(Guid cuentaId, Guid cfdiId, List<CrearNcDevolucionConceptoRequest> conceptosReq, CancellationToken ct);
     }
 }

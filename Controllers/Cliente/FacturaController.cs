@@ -131,5 +131,57 @@ namespace Facturacion.API.Controllers.Cliente
             var dto = await _facturacionService.CrearNotaCreditoTotalAsync(cuentaId, req.RazonSocialId, cfdiId, ct);
             return Ok(dto);
         }
+
+        [HttpPost("notas-credito/parcial-monto")]
+        public async Task<IActionResult> CrearNcParcialMonto(
+    [FromBody] NotaCreditoParcialMontoRequest req,
+    CancellationToken ct)
+        {
+            if (req is null)
+                return BadRequest(new { message = "Request inválido." });
+
+            if (req.Monto <= 0)
+                return BadRequest(new { message = "El monto debe ser mayor a 0." });
+
+            var cuentaId = Guid.Parse(User.GetCuentaId());
+
+            var dto = await _facturacionService.CrearNotaCreditoParcialMontoAsync(
+                cuentaId: cuentaId,
+                req,
+                ct: ct);
+
+            return Ok(dto);
+        }
+
+        [HttpPost("CrearNotaCreditoDevolucion")]
+        public async Task<IActionResult> CrearNotaCreditoDevolucion(
+    [FromBody] CrearNcDevolucionRequest req,
+    CancellationToken ct)
+        {
+            if (req is null)
+                return BadRequest(new { message = "Request inválido." });
+
+            if (req.CfdiId == Guid.Empty)
+                return BadRequest(new { message = "CfdiId es requerido." });
+
+            if (req.Conceptos is null || req.Conceptos.Count == 0)
+                return BadRequest(new { message = "Debes enviar al menos un concepto." });
+
+            if (req.Conceptos.Any(x => x.CfdiConceptoId == Guid.Empty))
+                return BadRequest(new { message = "CfdiConceptoId inválido." });
+
+            if (req.Conceptos.Any(x => x.Cantidad <= 0))
+                return BadRequest(new { message = "Cantidad debe ser mayor a 0." });
+
+            var cuentaId = Guid.Parse(User.GetCuentaId());
+
+            var dto = await _facturacionService.CrearNotaCreditoDevolucionAsync(
+                cuentaId,
+                req.CfdiId,
+                req.Conceptos,
+                ct);
+
+            return Ok(dto);
+        }
     }
 }
