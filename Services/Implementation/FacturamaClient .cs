@@ -77,15 +77,22 @@ namespace Facturacion.API.Services.Implementation
                 PropertyNamingPolicy = null
             });
 
-            using var content = new StringContent(json, Encoding.UTF8, "application/json");
-            using var resp = await _http.PostAsync("api-lite/3/cfdis", content, ct);
+            try
+            {
+                using var content = new StringContent(json, Encoding.UTF8, "application/json");
+                using var resp = await _http.PostAsync("api-lite/3/cfdis", content, ct);
 
-            var body = await resp.Content.ReadAsStringAsync(ct);
+                var body = await resp.Content.ReadAsStringAsync(ct);
 
-            if (!resp.IsSuccessStatusCode)
-                throw new InvalidOperationException($"error: {(int)resp.StatusCode} - {body}");
+                if (!resp.IsSuccessStatusCode)
+                    throw new InvalidOperationException($"error: {(int)resp.StatusCode} - {body}");
 
-            return (JsonDocument.Parse(body), body);
+                return (JsonDocument.Parse(body), body);
+            }
+            catch (Exception ex) {
+                throw;
+            }
+           
         }
 
         // Facturama: GET api/Cfdi/{format}/{type}/{id} -> FileViewModel (base64)

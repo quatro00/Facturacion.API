@@ -19,5 +19,7 @@ namespace Facturacion.API.Services.Interface
 
         Task<Guid> CreateSucursalAsync(Guid cuentaId, string usuarioId, SucursalCreateDto dto, CancellationToken ct);
         Task UpdateSucursalAsync(Guid cuentaId, string usuarioId, Guid sucursalId, SucursalUpdateDto dto, CancellationToken ct);
+
+        Task<SerieFolioPreviewDto> GetSerieFolioPreviewAsync(Guid cuentaId, Guid sucursalId, string conceptoSerie, CancellationToken ct);
     }
 }

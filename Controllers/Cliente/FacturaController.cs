@@ -21,12 +21,21 @@ namespace Facturacion.API.Controllers.Cliente
         [HttpPost("emitir")]
         public async Task<IActionResult> EmitirMulti([FromBody] EmitirCfdiRequest req, CancellationToken ct)
         {
-            if (req == null) return BadRequest("Request inválido.");
+            if (req is null) return BadRequest("Request inválido.");
             if (req.RazonSocialId == Guid.Empty) return BadRequest("RazonSocialId es requerido.");
             if (req.ClienteId == Guid.Empty) return BadRequest("ClienteId es requerido.");
-            if (req.Items == null || req.Items.Count == 0) return BadRequest("Debe incluir al menos un concepto.");
+            if (req.SucursalId == Guid.Empty) return BadRequest("SucursalId es requerido.");
+            if (req.Items is null || req.Items.Count == 0) return BadRequest("Debe incluir al menos un concepto.");
 
-            req.CfdiType = string.IsNullOrWhiteSpace(req.CfdiType) ? "I" : req.CfdiType.Trim().ToUpperInvariant();
+            // ✅ Siempre Ingreso
+            req.CfdiType = "I";
+
+            // ✅ Normaliza y valida TipoFactura (Concepto)
+            req.TipoFactura = (req.TipoFactura ?? "").Trim().ToUpperInvariant();
+            if (req.TipoFactura is not ("I_MERCANCIAS" or "I_SERVICIOS" or "I_ANTICIPO"))
+            {
+                return BadRequest("TipoFactura inválido. Valores permitidos: MERCANCIAS | SERVICIOS | ANTICIPO.");
+            }
 
             var cuentaId = Guid.Parse(User.GetCuentaId());
 

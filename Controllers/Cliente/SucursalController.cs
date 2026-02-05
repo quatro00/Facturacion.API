@@ -67,5 +67,17 @@ namespace Facturacion.API.Controllers.Cliente
             await _service.UpdateSucursalAsync(cuentaId, usuarioId, id, dto, ct);
             return NoContent();
         }
+
+        [HttpGet("{sucursalId:guid}/serie-folio")]
+        public async Task<ActionResult<SerieFolioPreviewDto>> GetSerieFolioPreview(
+        Guid sucursalId,
+        [FromQuery] string conceptoSerie,
+        CancellationToken ct)
+        {
+            var cuentaId = Guid.Parse(User.GetCuentaId());
+
+            var dto = await _service.GetSerieFolioPreviewAsync(cuentaId, sucursalId, conceptoSerie, ct);
+            return Ok(dto);
+        }
     }
 }

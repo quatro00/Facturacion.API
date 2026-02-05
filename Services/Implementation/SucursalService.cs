@@ -414,7 +414,54 @@ namespace Facturacion.API.Services.Implementation
         }
 
 
+        public async Task<SerieFolioPreviewDto> GetSerieFolioPreviewAsync(
+    Guid cuentaId,
+    Guid sucursalId,
+    string conceptoSerie,
+    CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(conceptoSerie))
+                throw new InvalidOperationException("conceptoSerie es requerido.");
 
+            conceptoSerie = conceptoSerie.Trim().ToUpperInvariant();
+
+            // valida conceptos permitidos
+            var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    { "I_MERCANCIAS", "I_SERVICIOS", "I_ANTICIPO" };
+
+            if (!allowed.Contains(conceptoSerie))
+                throw new InvalidOperationException($"conceptoSerie '{conceptoSerie}' no es válido.");
+
+            // CP desde sucursal
+            var sucursal = await _context.Sucursals.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == sucursalId && x.CuentaId == cuentaId && !x.IsDeleted, ct);
+
+            if (sucursal is null)
+                throw new InvalidOperationException("Sucursal no encontrada.");
+
+            // serie/folio desde SucursalSerie
+            var row = await _context.SucursalSeries.AsNoTracking()
+                .Where(x => x.CuentaId == cuentaId
+                    && x.SucursalId == sucursalId
+                    && x.TipoCfdi == "I"
+                    && x.Concepto == conceptoSerie
+                    && x.Activo)
+                .FirstOrDefaultAsync(ct);
+
+            if (row is null || string.IsNullOrWhiteSpace(row.Serie))
+                throw new InvalidOperationException(
+                    $"No hay serie configurada para '{conceptoSerie}' en esta sucursal. Ve a Sucursales > Series y configúrala."
+                );
+
+            var nextFolio = row.FolioActual + 1;
+
+            return new SerieFolioPreviewDto
+            {
+                Serie = row.Serie,
+                Folio = nextFolio,
+                ExpeditionPlace = sucursal.CodigoPostal // ✅ CP de expedición desde sucursal
+            };
+        }
         public async Task<Guid> CreateSucursalAsync(
     Guid cuentaId,
     string usuarioId,

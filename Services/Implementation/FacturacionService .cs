@@ -41,40 +41,130 @@ namespace Facturacion.API.Services.Implementation
 
         public async Task<JsonDocument> EmitirCfdiMultiAsync(EmitirCfdiRequest req, Guid cuentaId, CancellationToken ct = default)
         {
+            // =========================
             // 1) Cliente
+            // =========================
             var cliente = await _context.Clientes
                 .Include(x => x.RegimenFiscal)
                 .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.Id == req.ClienteId /* && x.CuentaId == cuentaId */, ct);
+                .FirstOrDefaultAsync(x => x.Id == req.ClienteId, ct);
 
             if (cliente is null)
-                throw new KeyNotFoundException("Cliente no encontrado");
+                throw new KeyNotFoundException("Cliente no encontrado.");
 
+            // =========================
             // 2) Config cliente
+            // =========================
             var config = await _context.ClienteConfiguracions.AsNoTracking()
                 .Where(x => x.ClienteId == req.ClienteId)
                 .OrderByDescending(x => x.FechaCreacion)
                 .FirstOrDefaultAsync(ct);
 
-            // 3) Emisor por cuenta
+            // =========================
+            // 3) Emisor
+            // =========================
             var emisor = await _context.RazonSocials
                 .Include(x => x.RegimenFiscal)
                 .FirstOrDefaultAsync(x => x.Id == req.RazonSocialId, ct);
 
             if (emisor is null)
-                throw new InvalidOperationException("No hay emisor configurado");
+                throw new InvalidOperationException("No existe el emisor seleccionado o no está configurado.");
 
-            req.ExpeditionPlace = emisor.CodigoPostal;
+            // =========================
+            // 4) Sucursal (validar pertenece a la cuenta)
+            // =========================
+            var sucursal = await _context.Sucursals
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == req.SucursalId && x.CuentaId == cuentaId && !x.IsDeleted, ct);
 
-            // 4) Armar payload Facturama
+            if (sucursal is null)
+                throw new InvalidOperationException("Sucursal no encontrada o no pertenece a la cuenta.");
+
+            // =========================
+            // 5) CP Expedición desde Sucursal (fallback a Emisor)
+            // =========================
+            var cpExpedicion = (sucursal.CodigoPostal ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(cpExpedicion))
+                cpExpedicion = (emisor.CodigoPostal ?? "").Trim();
+
+            if (string.IsNullOrWhiteSpace(cpExpedicion))
+                throw new InvalidOperationException("No se pudo determinar el CP de expedición. Configura el Código Postal en la sucursal o en el emisor.");
+
+            req.ExpeditionPlace = cpExpedicion;
+
+            // =========================
+            // 6) Serie + Folio según Series por Concepto (SucursalSerie)
+            //    - Concepto = req.TipoFactura (I_MERCANCIAS/I_SERVICIOS/I_ANTICIPO)
+            //    - CfdiType siempre "I"
+            //    - Concurrencia: UPDLOCK/HOLDLOCK y transacción SERIALIZABLE
+            // =========================
+            req.CfdiType = "I";
+            var concepto = req.TipoFactura; // ya normalizado en controller
+
+            var now = DateTime.Now;
+
+            // Nota: este FromSqlInterpolated requiere que tu DbSet sea _context.SucursalSeries (mapeado a dbo.SucursalSerie)
+            // y que existan columnas: CuentaId, SucursalId, Concepto, Serie, FolioActual, Activo, etc.
+            using var tx = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+
+            var serieRow = await _context.SucursalSeries
+                .FromSqlInterpolated($@"
+                SELECT *
+                FROM dbo.SucursalSerie WITH (UPDLOCK, HOLDLOCK)
+                WHERE CuentaId  = {cuentaId}
+                  AND SucursalId = {req.SucursalId}
+                  AND Concepto  = {concepto}
+                  AND Activo = 1
+            ")
+                .FirstOrDefaultAsync(ct);
+
+            if (serieRow is null || string.IsNullOrWhiteSpace(serieRow.Serie))
+            {
+                var humano = concepto switch
+                {
+                    "I_MERCANCIAS" => "Mercancías",
+                    "I_SERVICIOS" => "Servicios",
+                    "I_ANTICIPO" => "Anticipo",
+                    _ => concepto
+                };
+
+                // ✅ Error más descriptivo
+                throw new InvalidOperationException(
+                    $"No está configurada la serie para '{humano}' en la sucursal '{sucursal.Codigo} - {sucursal.Nombre}'. " +
+                    $"Configúrala en: Sucursales → Detalle → Series (Concepto {concepto})."
+                );
+            }
+
+            // siguiente folio = FolioActual + 1
+            // (si FolioActual es null en tu entidad, ajusta a nullable)
+            var folioActual = serieRow.FolioActual;
+            if (folioActual < 0) folioActual = 0;
+
+            var nextFolio = folioActual + 1;
+
+            req.Serie = serieRow.Serie.Trim().ToUpperInvariant();
+            req.Folio = nextFolio.ToString();
+
+            // actualiza folio actual
+            serieRow.FolioActual = nextFolio;
+
+            // si tienes estos campos, déjalos; si no existen en la entidad, quítalos
+            serieRow.FechaModificacion = now;
+
+            await _context.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+
+            // =========================
+            // 7) Armar payload Facturama
+            // =========================
             var payload = new FacturamaCfdiRequest
             {
-                Date = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss"),
+                Date = now.ToString("yyyy-MM-ddTHH:mm:ss"),
                 Serie = req.Serie,
                 Folio = req.Folio,
-                CfdiType = string.IsNullOrWhiteSpace(req.CfdiType) ? "I" : req.CfdiType,
+                CfdiType = "I",
                 Currency = req.Currency,
-                ExpeditionPlace = req.ExpeditionPlace,
+                ExpeditionPlace = req.ExpeditionPlace!,
                 Exportation = req.Exportation,
 
                 PaymentForm = req.PaymentForm ?? config?.FormaPago,
@@ -102,18 +192,20 @@ namespace Facturacion.API.Services.Implementation
                     Quantity = i.Quantity,
                     UnitPrice = i.UnitPrice,
                     TaxObject = string.IsNullOrWhiteSpace(i.TaxObject) ? "02" : i.TaxObject,
-                    Taxes = (i.Taxes ?? new()).Select(tx => new FacturamaTax
+                    Taxes = (i.Taxes ?? new()).Select(tx2 => new FacturamaTax
                     {
-                        Name = tx.Name,
-                        Rate = tx.Rate,
-                        Base = tx.Base,
-                        Total = tx.Total,
-                        IsRetention = tx.IsRetention
+                        Name = tx2.Name,
+                        Rate = tx2.Rate,
+                        Base = tx2.Base,
+                        Total = tx2.Total,
+                        IsRetention = tx2.IsRetention
                     }).ToList()
                 }).ToList()
             };
 
-            // 4.1 Normaliza Subtotal/Taxes/Total por item (tu bloque, mejorado)
+            // =========================
+            // 7.1 Normaliza Subtotal/Taxes/Total por item
+            // =========================
             foreach (var item in payload.Items)
             {
                 item.Subtotal = R2(item.Quantity * item.UnitPrice);
@@ -127,29 +219,42 @@ namespace Facturacion.API.Services.Implementation
 
                 if (item.Taxes != null && item.Taxes.Count > 0)
                 {
-                    foreach (var tx in item.Taxes)
+                    foreach (var tx2 in item.Taxes)
                     {
-                        tx.Base = R2(item.Subtotal);
-                        tx.Total = R2(tx.Base * tx.Rate);
+                        tx2.Base = R2(item.Subtotal);
+                        tx2.Total = R2(tx2.Base * tx2.Rate);
                     }
                 }
 
                 var traslados = item.Taxes?.Where(t => !t.IsRetention).Sum(t => t.Total) ?? 0m;
                 var retenciones = item.Taxes?.Where(t => t.IsRetention).Sum(t => t.Total) ?? 0m;
+
                 item.Total = R2(item.Subtotal + traslados - retenciones);
             }
 
-            // 4.2 Serializa EXACTAMENTE lo que mandas (para Raw)
+            // =========================
+            // 8) Guardar request raw
+            // =========================
             var requestJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions { PropertyNamingPolicy = null });
 
-            // 5) Llamar a Facturama, pero ahora devuelve body string para guardarlo tal cual
+            // =========================
+            // 9) Llamar Facturama
+            // =========================
             var (doc, responseBody) = await _facturama.CrearCfdiMultiRawAsync(payload, ct);
 
-            // 6) Guardar en BD (Cfdi + Detalle + Raw + Historial) dentro de una transacción
+            // =========================
+            // 10) Guardar en BD (tu método existente)
+            // =========================
             await GuardarCfdiAsync(cuentaId, req, payload, requestJson, responseBody, doc, ct);
 
             return doc;
         }
+
+
+
+
+
+
 
         private static int MapFacturamaStatusToCfdiStatusId(string? facturamaStatus)
         {
@@ -276,7 +381,7 @@ namespace Facturacion.API.Services.Implementation
                     CuentaId = cuentaId,
                     ClienteId = req.ClienteId,
                     FacturamaId = facturamaId ?? "",
-
+                    SucursalId = req.SucursalId,
                     Uuid = uuid,
                     Serie = string.IsNullOrWhiteSpace(serie) ? req.Serie : serie,
                     Folio = string.IsNullOrWhiteSpace(folio) ? req.Folio : folio,
