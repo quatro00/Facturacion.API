@@ -41,6 +41,7 @@ builder.Services.AddScoped<ICatalogoService, CatalogoService>();
 builder.Services.AddScoped<IFacturacionService, FacturacionService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<ISucursalService, SucursalService>();
+builder.Services.AddScoped<ITimbresService, TimbresService>();
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 

@@ -3,6 +3,7 @@ using Facturacion.API.Models.Domain;
 using Facturacion.API.Models.Dto;
 using Facturacion.API.Models.Dto.Cliente.Factura;
 using Facturacion.API.Models.Dto.Constants;
+using Facturacion.API.Models.Dto.Timbres;
 using Facturacion.API.Services.Interface;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -17,12 +18,14 @@ namespace Facturacion.API.Services.Implementation
         private readonly FacturacionContext _context;
         private readonly IFacturamaClient _facturama;
         private readonly IEmailSender _emailSender;
+        private readonly ITimbresService _timbresService;
 
-        public FacturacionService(FacturacionContext context, IFacturamaClient facturama, IEmailSender emailSender)
+        public FacturacionService(FacturacionContext context, IFacturamaClient facturama, IEmailSender emailSender, ITimbresService _timbresService)
         {
             _context = context;
             _facturama = facturama;
             _emailSender = emailSender;
+            this._timbresService = _timbresService;
         }
         //----helpers----
         private static decimal R2(decimal v) =>
@@ -235,6 +238,7 @@ namespace Facturacion.API.Services.Implementation
             // =========================
             // 8) Guardar request raw
             // =========================
+            await _timbresService.ValidarDisponiblesAsync(cuentaId, ct);
             var requestJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions { PropertyNamingPolicy = null });
 
             // =========================
@@ -242,10 +246,36 @@ namespace Facturacion.API.Services.Implementation
             // =========================
             var (doc, responseBody) = await _facturama.CrearCfdiMultiRawAsync(payload, ct);
 
+
+
+            // Extraer IDs
+            var (facturamaId, uuid) = ExtraerFacturamaIds(doc);
+
             // =========================
             // 10) Guardar en BD (tu método existente)
             // =========================
-            await GuardarCfdiAsync(cuentaId, req, payload, requestJson, responseBody, doc, ct);
+            var cfdiId = await GuardarCfdiAsync(cuentaId, req, payload, requestJson, responseBody, doc, ct);
+
+            // =========================
+            // 11) Descontar timbre (solo si trae UUID o al menos facturamaId)
+            // =========================
+            if (string.IsNullOrWhiteSpace(uuid) && string.IsNullOrWhiteSpace(facturamaId))
+            {
+                // Si Facturama respondió success pero no encontramos IDs, mejor NO descontar
+                // y deja rastros en logs para revisión.
+                //_logger.LogWarning("Timbrado OK pero no se pudo extraer UUID/Id. cfdiId={CfdiId}", cfdiId);
+            }
+            else
+            {
+                await _timbresService.RegistrarConsumoTimbradoAsync(
+                    cuentaId,
+                    cfdiId,
+                    facturamaId,
+                    uuid,
+                    TimbreAcciones.Timbrado,
+                    /* user */ null,
+                    ct);
+            }
 
             return doc;
         }
@@ -253,7 +283,58 @@ namespace Facturacion.API.Services.Implementation
 
 
 
+        private static (string? facturamaId, string? uuid) ExtraerFacturamaIds(JsonDocument doc)
+        {
+            var root = doc.RootElement;
 
+            // 1) Buscar FacturamaId (Id, id, CfdiId, cfdiId)
+            string? id =
+                TryGetString(root, "Id") ??
+                TryGetString(root, "id") ??
+                TryGetString(root, "CfdiId") ??
+                TryGetString(root, "cfdiId");
+
+            // 2) Buscar UUID en rutas comunes (Complemento, Complement, etc.)
+            string? uuid =
+                TryGetString(root, "Uuid") ??
+                TryGetString(root, "UUID") ??
+                TryGetString(root, "uuid");
+
+            // Muchas respuestas lo traen anidado:
+            // Complement -> TaxStamp / TimbreFiscalDigital / Complemento
+            uuid ??= TryGetNestedString(root, new[] { "Complement", "TaxStamp", "Uuid" });
+            uuid ??= TryGetNestedString(root, new[] { "Complement", "TaxStamp", "UUID" });
+            uuid ??= TryGetNestedString(root, new[] { "Complemento", "TimbreFiscalDigital", "UUID" });
+            uuid ??= TryGetNestedString(root, new[] { "Complemento", "TimbreFiscalDigital", "Uuid" });
+            uuid ??= TryGetNestedString(root, new[] { "Complement", "TimbreFiscalDigital", "UUID" });
+
+            // A veces el UUID viene dentro de "Cfdi" u otro nodo
+            uuid ??= TryGetNestedString(root, new[] { "Cfdi", "Complement", "TaxStamp", "Uuid" });
+            uuid ??= TryGetNestedString(root, new[] { "cfdi", "complement", "taxStamp", "uuid" });
+
+            return (id, uuid);
+
+            static string? TryGetString(JsonElement el, string prop)
+            {
+                if (el.ValueKind == JsonValueKind.Object && el.TryGetProperty(prop, out var v))
+                {
+                    if (v.ValueKind == JsonValueKind.String) return v.GetString();
+                }
+                return null;
+            }
+
+            static string? TryGetNestedString(JsonElement el, string[] path)
+            {
+                var cur = el;
+                foreach (var p in path)
+                {
+                    if (cur.ValueKind != JsonValueKind.Object) return null;
+                    if (!cur.TryGetProperty(p, out var next)) return null;
+                    cur = next;
+                }
+                return cur.ValueKind == JsonValueKind.String ? cur.GetString() : null;
+            }
+        }
 
 
         private static int MapFacturamaStatusToCfdiStatusId(string? facturamaStatus)
@@ -1102,8 +1183,20 @@ namespace Facturacion.API.Services.Implementation
             };
 
             // Llamada Facturama (tu método actual)
+            await _timbresService.ValidarDisponiblesAsync(cuentaId, ct);
+
             var requestJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions { PropertyNamingPolicy = null });
             var (doc, responseJson) = await _facturama.CrearCfdiMultiRawAsync(payload, ct);
+
+            // Extraer IDs de Facturama de forma robusta
+            var (facturamaId, uuidStr) = ExtraerFacturamaIds(doc);
+
+            if (string.IsNullOrWhiteSpace(uuidStr))
+                throw new InvalidOperationException("La respuesta de Facturama no contiene UUID; no se puede continuar con el guardado/auditoría.");
+
+            Guid uuidNc;
+            if (!Guid.TryParse(uuidStr, out uuidNc))
+                throw new InvalidOperationException($"UUID inválido devuelto por Facturama: {uuidStr}");
 
             // EmitirCfdiRequest mínimo para reusar GuardarCfdiAsync
             var req = new EmitirCfdiRequest
@@ -1121,7 +1214,7 @@ namespace Facturacion.API.Services.Implementation
 
             // ✅ Reusar tu guardado (con relación)
             await GuardarCfdiAsync(
-                cuentaId: cuentaId,// 👈 IMPORTANTE
+                cuentaId: cuentaId,
                 req: req,
                 payload: payload,
                 requestJson: requestJson,
@@ -1132,14 +1225,10 @@ namespace Facturacion.API.Services.Implementation
                 tipoRelacionSat: "01"
             );
 
-            // Si quieres devolver el Id/UUID recién creado, aquí hay 2 opciones:
-            // A) Modificar GuardarCfdiAsync para que regrese el Cfdi.Id creado
-            // B) Buscar por FacturamaId/Uuid parseando doc (rápido)
-            var uuidNc = Guid.Parse(doc.RootElement.GetProperty("Complement").GetProperty("TaxStamp").GetProperty("Uuid").GetString()!);
-
+            // Buscar el Cfdi ya guardado (por UUID)
             var nc = await _context.Cfdis
                 .AsNoTracking()
-                .Where(x => x.Uuid == uuidNc)
+                .Where(x => x.CuentaId == cuentaId && x.Uuid == uuidNc)
                 .Select(x => new CfdiCreadoDto
                 {
                     Id = x.Id,
@@ -1150,6 +1239,16 @@ namespace Facturacion.API.Services.Implementation
                     Total = x.Total
                 })
                 .FirstAsync(ct);
+
+            // ✅ Descontar timbre (NOTA DE CRÉDITO también consume)
+            await _timbresService.RegistrarConsumoTimbradoAsync(
+                cuentaId,
+                cfdiId: nc.Id,
+                facturamaId: facturamaId ?? nc.FacturamaId, // usa lo que tengas
+                uuid: nc.Uuid,                              // ya seguro
+                accion: TimbreAcciones.NotaCredito,
+                createdBy: null, // o user
+                ct);
 
             return nc;
         }
@@ -1360,8 +1459,23 @@ namespace Facturacion.API.Services.Implementation
             };
 
             var requestJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions { PropertyNamingPolicy = null });
+
+            // 1) Bloquear si no hay timbres
+            await _timbresService.ValidarDisponiblesAsync(cuentaId, ct);
+
+            // 2) Timbrar con Facturama
             var (doc, responseJson) = await _facturama.CrearCfdiMultiRawAsync(payload, ct);
 
+            // 3) Extraer UUID/Id de Facturama (SIN asumir rutas fijas)
+            var (facturamaId, uuidStr) = ExtraerFacturamaIds(doc);
+
+            if (string.IsNullOrWhiteSpace(uuidStr))
+                throw new InvalidOperationException("Facturama respondió OK pero no devolvió UUID.");
+
+            if (!Guid.TryParse(uuidStr, out var uuidNc))
+                throw new InvalidOperationException($"UUID inválido devuelto por Facturama: {uuidStr}");
+
+            // 4) Preparar req mínimo
             var req = new EmitirCfdiRequest
             {
                 ClienteId = origen.ClienteId,
@@ -1375,6 +1489,7 @@ namespace Facturacion.API.Services.Implementation
                 RazonSocialId = razonSocialId
             };
 
+            // 5) Guardar en BD
             await GuardarCfdiAsync(
                 cuentaId: cuentaId,
                 req: req,
@@ -1387,11 +1502,10 @@ namespace Facturacion.API.Services.Implementation
                 tipoRelacionSat: "01"
             );
 
-            var uuidNc = Guid.Parse(doc.RootElement.GetProperty("Complement").GetProperty("TaxStamp").GetProperty("Uuid").GetString()!);
-
-            return await _context.Cfdis
+            // 6) Traer el CFDI guardado (asegura CuentaId)
+            var creado = await _context.Cfdis
                 .AsNoTracking()
-                .Where(x => x.Uuid == uuidNc)
+                .Where(x => x.CuentaId == cuentaId && x.Uuid == uuidNc)
                 .Select(x => new CfdiCreadoDto
                 {
                     Id = x.Id,
@@ -1402,6 +1516,18 @@ namespace Facturacion.API.Services.Implementation
                     Total = x.Total
                 })
                 .FirstAsync(ct);
+
+            // 7) Descontar timbre (Nota de crédito)
+            await _timbresService.RegistrarConsumoTimbradoAsync(
+                cuentaId,
+                cfdiId: creado.Id,
+                facturamaId: facturamaId ?? creado.FacturamaId,
+                uuid: creado.Uuid,
+                accion: TimbreAcciones.NotaCredito,
+                createdBy: null, // o tu usuario
+                ct: ct);
+
+            return creado;
         }
 
         public async Task<CfdiCreadoDto> CrearNotaCreditoDevolucionAsync(
@@ -1615,8 +1741,23 @@ namespace Facturacion.API.Services.Implementation
 
             // 4) Timbrar + Guardar
             var requestJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions { PropertyNamingPolicy = null });
+
+            // Bloquear si no hay timbres
+            await _timbresService.ValidarDisponiblesAsync(cuentaId, ct);
+
+            // Timbrar con Facturama
             var (doc, responseJson) = await _facturama.CrearCfdiMultiRawAsync(payload, ct);
 
+            // Extraer Id/UUID de Facturama (robusto)
+            var (facturamaId, uuidStr) = ExtraerFacturamaIds(doc);
+
+            if (string.IsNullOrWhiteSpace(uuidStr))
+                throw new InvalidOperationException("Facturama respondió OK pero no devolvió UUID.");
+
+            if (!Guid.TryParse(uuidStr, out var uuidNc))
+                throw new InvalidOperationException($"UUID inválido devuelto por Facturama: {uuidStr}");
+
+            // Req mínimo para tu guardado
             var reqEmitir = new EmitirCfdiRequest
             {
                 ClienteId = origen.ClienteId,
@@ -1630,6 +1771,7 @@ namespace Facturacion.API.Services.Implementation
                 RazonSocialId = origen.RazonSocialId
             };
 
+            // Guardar CFDI en tu BD (con relación al origen)
             await GuardarCfdiAsync(
                 cuentaId: cuentaId,
                 req: reqEmitir,
@@ -1642,16 +1784,10 @@ namespace Facturacion.API.Services.Implementation
                 tipoRelacionSat: "01"
             );
 
-            var uuidNc = Guid.Parse(
-                doc.RootElement.GetProperty("Complement")
-                   .GetProperty("TaxStamp")
-                   .GetProperty("Uuid")
-                   .GetString()!
-            );
-
-            return await _context.Cfdis
+            // Buscar el CFDI guardado (por UUID + Cuenta)
+            var creado = await _context.Cfdis
                 .AsNoTracking()
-                .Where(x => x.Uuid == uuidNc)
+                .Where(x => x.CuentaId == cuentaId && x.Uuid == uuidNc)
                 .Select(x => new CfdiCreadoDto
                 {
                     Id = x.Id,
@@ -1662,6 +1798,18 @@ namespace Facturacion.API.Services.Implementation
                     Total = x.Total
                 })
                 .FirstAsync(ct);
+
+            // Descontar timbre (Nota de crédito)
+            await _timbresService.RegistrarConsumoTimbradoAsync(
+                cuentaId,
+                cfdiId: creado.Id,
+                facturamaId: facturamaId ?? creado.FacturamaId,
+                uuid: creado.Uuid,
+                accion: TimbreAcciones.NotaCredito,
+                createdBy: null, // o tu user
+                ct: ct);
+
+            return creado;
         }
 
       

@@ -10,6 +10,8 @@
         public string? NombreComercial { get; set; }
 
         public Guid RegimenFiscalId { get; set; }
+        public string RegimenFiscal { get; set; }
+        public string RegimenFiscalCodigo { get; set; }
 
         public string? EmailEmisor { get; set; }
         public string? TelefonoEmisor { get; set; }

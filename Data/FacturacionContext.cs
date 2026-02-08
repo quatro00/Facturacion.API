@@ -68,6 +68,10 @@ public partial class FacturacionContext : DbContext
 
     public virtual DbSet<ClientePac> ClientePacs { get; set; }
 
+    public virtual DbSet<CuentaTimbre> CuentaTimbres { get; set; }
+
+    public virtual DbSet<CuentaTimbreMovimiento> CuentaTimbreMovimientos { get; set; }
+
     public virtual DbSet<Cuentum> Cuenta { get; set; }
 
     public virtual DbSet<Organizacion> Organizacions { get; set; }
@@ -86,9 +90,7 @@ public partial class FacturacionContext : DbContext
 
     public virtual DbSet<SucursalSerie> SucursalSeries { get; set; }
 
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see http://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseSqlServer("Data Source=DESKTOP-JM00DK5;Initial Catalog=Facturacion;Persist Security Info=True;User ID=sa;Password=sql2;TrustServerCertificate=True");
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -403,6 +405,8 @@ public partial class FacturacionContext : DbContext
             entity.HasIndex(e => new { e.RazonSocialId, e.SucursalId, e.FechaTimbrado }, "IX_Cfdi_RazonSocial_Sucursal_Fecha");
 
             entity.HasIndex(e => new { e.Serie, e.Folio }, "IX_Cfdi_SerieFolio");
+
+            entity.HasIndex(e => new { e.SucursalId, e.FechaTimbrado }, "IX_Cfdi_SucursalId_FechaTimbraco");
 
             entity.HasIndex(e => e.Uuid, "IX_Cfdi_Uuid").IsUnique();
 
@@ -755,6 +759,41 @@ public partial class FacturacionContext : DbContext
                 .HasConstraintName("FK_ClientePac_Cliente");
         });
 
+        modelBuilder.Entity<CuentaTimbre>(entity =>
+        {
+            entity.HasKey(e => e.CuentaId).HasName("PK__CuentaTi__40072E810CD0596F");
+
+            entity.Property(e => e.CuentaId).ValueGeneratedNever();
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+            entity.Property(e => e.UpdatedAt)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())");
+        });
+
+        modelBuilder.Entity<CuentaTimbreMovimiento>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__CuentaTi__3214EC07A64B6BF4");
+
+            entity.HasIndex(e => new { e.CuentaId, e.CreatedAt }, "IX_CuentaTimbreMov_Cuenta_Fecha").IsDescending(false, true);
+
+            entity.HasIndex(e => new { e.CuentaId, e.Uuid }, "UX_CuentaTimbreMov_Cuenta_Uuid_Timbrado")
+                .IsUnique()
+                .HasFilter("([Uuid] IS NOT NULL AND ([Accion] IN ('TIMBRADO', 'NOTA_CREDITO', 'TIMBRADO_PAGO', 'CANCELADO')))");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.Accion).HasMaxLength(30);
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())");
+            entity.Property(e => e.CreatedBy).HasMaxLength(80);
+            entity.Property(e => e.FacturamaId).HasMaxLength(80);
+            entity.Property(e => e.Notas).HasMaxLength(300);
+            entity.Property(e => e.Referencia).HasMaxLength(120);
+            entity.Property(e => e.Uuid).HasMaxLength(50);
+        });
+
         modelBuilder.Entity<Cuentum>(entity =>
         {
             entity.Property(e => e.Id).ValueGeneratedNever();
@@ -876,10 +915,6 @@ public partial class FacturacionContext : DbContext
             entity.ToTable("Sucursal");
 
             entity.HasIndex(e => new { e.CuentaId, e.Activo }, "IX_Sucursal_Cuenta_Activo").HasFilter("([IsDeleted]=(0))");
-
-            entity.HasIndex(e => new { e.CuentaId, e.Codigo }, "UX_Sucursal_Cuenta_Codigo")
-                .IsUnique()
-                .HasFilter("([IsDeleted]=(0))");
 
             entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.Activo)

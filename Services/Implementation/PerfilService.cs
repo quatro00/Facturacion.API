@@ -102,6 +102,8 @@ namespace Facturacion.API.Services.Implementation
                     NombreComercial = x.NombreComercial,
 
                     RegimenFiscalId = x.RegimenFiscalId,
+                    RegimenFiscalCodigo = x.RegimenFiscal.RegimenFiscal,
+                    RegimenFiscal = x.RegimenFiscal.Descripcion,
 
                     EmailEmisor = x.EmailEmisor,
                     TelefonoEmisor = x.TelefonoEmisor,
